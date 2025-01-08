@@ -32,6 +32,8 @@ export default function DashboardLayout({
         onBuyerChange={setSelectedBuyer}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
+        onRefresh={async () => {}}
+        isRefreshing={false}
       />
       <main className="container mx-auto p-4 space-y-6">
         <DashboardMetrics data={data} />
