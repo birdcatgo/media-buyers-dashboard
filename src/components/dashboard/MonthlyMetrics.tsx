@@ -150,8 +150,8 @@ export const MonthlyMetrics = ({
     const parseDate = (dateStr: string | Date) => {
       if (dateStr instanceof Date) return dateStr;
       
-      // Parse MM/DD/YYYY format
-      const [month, day, year] = dateStr.split('/').map(Number);
+      // Parse DD/MM/YYYY format (changed from MM/DD/YYYY)
+      const [day, month, year] = dateStr.split('/').map(Number);
       return new Date(year, month - 1, day);
     };
 
@@ -161,8 +161,8 @@ export const MonthlyMetrics = ({
     filteredData.forEach(row => {
       try {
         const date = parseDate(row.date);
-        // Format as MM/DD/YYYY to match input format
-        const formattedDate = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}/${date.getFullYear()}`;
+        // Format as DD/MM/YYYY to match input format
+        const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
         
         const currentProfit = dailyProfits.get(formattedDate)?.profit || 0;
         dailyProfits.set(formattedDate, {
@@ -176,10 +176,10 @@ export const MonthlyMetrics = ({
 
     // Fill in missing dates with zero profit
     const startDate = new Date(2025, 0, 1);  // January 1st, 2025
-    const endDate = new Date(2025, 0, 7);    // Changed to January 7th, 2025
+    const endDate = new Date(2025, 0, 7);    // January 7th, 2025
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const formattedDate = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}`;
+      const formattedDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
       if (!dailyProfits.has(formattedDate)) {
         dailyProfits.set(formattedDate, {
           date: formattedDate,

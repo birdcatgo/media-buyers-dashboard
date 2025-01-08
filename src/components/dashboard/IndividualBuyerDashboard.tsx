@@ -84,15 +84,15 @@ const DailyProfitChart = ({ data, timeRange, setTimeRange }: {
   setTimeRange: (value: TimeRange) => void;
 }) => {
   const filteredData = useMemo(() => {
-    // Parse MM/DD/YYYY string to Date
+    // Parse DD/MM/YYYY string to Date
     const parseDate = (dateStr: string) => {
-      const [month, day, year] = dateStr.split('/').map(Number);
+      const [day, month, year] = dateStr.split('/').map(Number);
       return new Date(year, month - 1, day);
     };
 
     // Get reference dates
-    const endDate = new Date('2025-01-06');
-    let startDate = new Date('2025-01-06');
+    const endDate = new Date(2025, 0, 7);  // January 7th, 2025
+    let startDate = new Date(2025, 0, 1);  // January 1st, 2025
 
     // Calculate start date based on timeRange
     switch (timeRange) {
@@ -114,6 +114,7 @@ const DailyProfitChart = ({ data, timeRange, setTimeRange }: {
     }
 
     return data.filter(item => {
+      if (!item.date) return false;
       const itemDate = parseDate(item.date);
       return itemDate >= startDate && itemDate <= endDate;
     });
@@ -189,31 +190,6 @@ const DateRangeSelector = ({ timeRange, setTimeRange }: {
   </div>
 );
 
-const getFilteredData = (data: any[], timeRange: TimeRange) => {
-  const endDate = new Date('2025-01-06');
-  return data.filter(row => {
-    if (typeof row.date !== 'string') return false;
-    const [mm, dd, yyyy] = row.date.split('/').map(Number);
-    const rowDate = new Date(yyyy, mm - 1, dd);
-    
-    switch (timeRange) {
-      case 'eod':
-        return mm === 1 && dd === 6 && yyyy === 2025;
-      case '7d': {
-        const startDate = new Date(endDate);
-        startDate.setDate(startDate.getDate() - 7);
-        return rowDate >= startDate && rowDate <= endDate;
-      }
-      case 'mtd': {
-        const startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-        return rowDate >= startDate && rowDate <= endDate;
-      }
-      default:
-        return true;
-    }
-  });
-};
-
 export const BuyerDashboard = ({ 
   buyer, 
   data,
@@ -224,21 +200,36 @@ export const BuyerDashboard = ({
   const [customDate, setCustomDate] = useState(new Date('2025-01-06'));
 
   const filteredData = useMemo(() => {
-    let filtered = [...data.tableData].filter(row => row.mediaBuyer === buyer);
-    
-    if (offer !== 'all') {
-      filtered = filtered.filter(row => row.offer === offer);
-    }
-    if (network !== 'all') {
-      filtered = filtered.filter(row => row.network === network);
-    }
-    
-    return filtered;
-  }, [data.tableData, buyer, offer, network]);
+    return data.tableData.filter(row => {
+      if (typeof row.date !== 'string') return false;
+      
+      // Parse DD/MM/YYYY format
+      const [day, month, year] = row.date.split('/').map(Number);
+      return month === 1 && year === 2025 && day <= 7 && row.mediaBuyer === buyer;
+    });
+  }, [data.tableData, buyer]);
 
   const metrics = useMemo(() => {
-    const timeFilteredData = getFilteredData(filteredData, timeRange);
-    return timeFilteredData.reduce(
+    // Use the same date filtering logic as filteredData
+    const mtdData = filteredData.filter(row => {
+      if (typeof row.date !== 'string') return false;
+      const [day, month, year] = row.date.split('/').map(Number);
+      
+      switch (timeRange) {
+        case 'eod':
+          return day === 7 && month === 1 && year === 2025;
+        case '7d': {
+          return day <= 7 && month === 1 && year === 2025;
+        }
+        case 'mtd': {
+          return month === 1 && year === 2025 && day <= 7;
+        }
+        default:
+          return true;
+      }
+    });
+
+    return mtdData.reduce(
       (acc, row) => ({
         spend: acc.spend + row.adSpend,
         revenue: acc.revenue + row.adRev,
@@ -249,15 +240,13 @@ export const BuyerDashboard = ({
   }, [filteredData, timeRange]);
 
   const { offerPerformance, accountPerformance } = useMemo(() => {
-    const timeFilteredData = getFilteredData(filteredData, timeRange);
-    
-    const byOffer = timeFilteredData.reduce((acc, row) => {
+    const byOffer = filteredData.reduce((acc, row) => {
       // Use combination of network and offer without hyphen
       const key = `${row.network} ${row.offer}`;
       
       if (!acc[key]) {
         acc[key] = { 
-          name: key,  // Store the combined network-offer as name
+          name: key,
           profit: 0, 
           spend: 0, 
           revenue: 0 
@@ -267,23 +256,38 @@ export const BuyerDashboard = ({
       acc[key].spend += row.adSpend;
       acc[key].revenue += row.adRev;
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, { 
+      name: string; 
+      profit: number; 
+      spend: number; 
+      revenue: number; 
+    }>);
 
-    const byAccount = timeFilteredData.reduce((acc, row) => {
+    const byAccount = filteredData.reduce((acc, row) => {
       if (!acc[row.adAccount]) {
-        acc[row.adAccount] = { name: row.adAccount, profit: 0, spend: 0, revenue: 0 };
+        acc[row.adAccount] = { 
+          name: row.adAccount, 
+          profit: 0, 
+          spend: 0, 
+          revenue: 0 
+        };
       }
       acc[row.adAccount].profit += row.profit;
       acc[row.adAccount].spend += row.adSpend;
       acc[row.adAccount].revenue += row.adRev;
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, { 
+      name: string; 
+      profit: number; 
+      spend: number; 
+      revenue: number; 
+    }>);
 
     return {
-      offerPerformance: (Object.values(byOffer) as { profit: number }[]).sort((a, b) => b.profit - a.profit),
-      accountPerformance: (Object.values(byAccount) as { profit: number }[]).sort((a, b) => b.profit - a.profit)
+      offerPerformance: Object.values(byOffer).sort((a, b) => b.profit - a.profit),
+      accountPerformance: Object.values(byAccount).sort((a, b) => b.profit - a.profit)
     };
-  }, [filteredData, timeRange]);
+  }, [filteredData]);
 
   const dailyProfitData = useMemo(() => {
     const parseDate = (dateStr: string | Date) => {
@@ -294,13 +298,13 @@ export const BuyerDashboard = ({
       return new Date(year, month - 1, day);
     };
 
-    // Create a map to store daily profits
     const dailyProfits = new Map();
 
     // Process each row
     filteredData.forEach(row => {
       try {
         const date = parseDate(row.date);
+        // Format as DD/MM/YYYY
         const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
         
         const currentProfit = dailyProfits.get(formattedDate)?.profit || 0;
@@ -309,14 +313,14 @@ export const BuyerDashboard = ({
           profit: currentProfit + Number(row.profit)
         });
       } catch (e) {
-        console.error('Error parsing date:', row.date);
+        console.error('Error processing row:', row, e);
       }
     });
 
-    // Fill in missing dates
-    const startDate = new Date('2025-01-01');
-    const endDate = new Date('2025-01-06');
-    
+    // Fill in missing dates with zero profit
+    const startDate = new Date(2025, 0, 1);  // January 1st, 2025
+    const endDate = new Date(2025, 0, 7);    // January 7th, 2025
+
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const formattedDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
       if (!dailyProfits.has(formattedDate)) {
@@ -327,12 +331,11 @@ export const BuyerDashboard = ({
       }
     }
 
-    // Convert to array and sort by date
     return Array.from(dailyProfits.values())
       .sort((a, b) => {
-        const [aDay, aMonth] = a.date.split('/').map(Number);
-        const [bDay, bMonth] = b.date.split('/').map(Number);
-        return (aMonth - bMonth) || (aDay - bDay);
+        const dateA = parseDate(a.date);
+        const dateB = parseDate(b.date);
+        return dateA.getTime() - dateB.getTime();
       });
   }, [filteredData]);
 
@@ -386,9 +389,13 @@ export const BuyerDashboard = ({
       <div className="mt-8">
         <RawData 
           buyer={buyer}
+          data={{
+            ...data,
+            // Pre-filter the tableData for this buyer
+            tableData: data.tableData.filter(row => row.mediaBuyer === buyer)
+          }}
           offer={offer}
           network={network}
-          data={data}
         />
       </div>
     </div>

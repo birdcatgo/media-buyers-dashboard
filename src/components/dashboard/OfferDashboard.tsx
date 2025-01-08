@@ -17,23 +17,26 @@ type DataPoint = {
 
 // First, add the date filtering function
 const getFilteredData = (data: any[], timeRange: TimeRange) => {
-  const endDate = new Date('2025-01-06');
   return data.filter(row => {
     if (typeof row.date !== 'string') return false;
-    const [mm, dd, yyyy] = row.date.split('/').map(Number);
-    const rowDate = new Date(yyyy, mm - 1, dd);
+    
+    // Parse DD/MM/YYYY format
+    const [day, month, year] = row.date.split('/').map(Number);
     
     switch (timeRange) {
       case 'eod':
-        return mm === 1 && dd === 6 && yyyy === 2025;  // January 6th, 2025
+        return day === 7 && month === 1 && year === 2025;  // January 7th, 2025
       case '7d': {
-        const startDate = new Date(endDate);
-        startDate.setDate(startDate.getDate() - 7);
-        return rowDate >= startDate && rowDate <= endDate;
+        // Include data from Jan 1-7
+        return month === 1 && year === 2025 && day <= 7;
       }
       case 'mtd': {
-        const startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-        return rowDate >= startDate && rowDate <= endDate;
+        // Include all January data up to the 7th
+        return month === 1 && year === 2025 && day <= 7;
+      }
+      case '90d': {
+        // For now, just show January data since that's all we have
+        return month === 1 && year === 2025 && day <= 7;
       }
       default:
         return true;

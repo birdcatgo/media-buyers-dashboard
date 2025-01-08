@@ -189,54 +189,24 @@ export const RawData = ({
 
   const filteredData = useMemo(() => {
     let filtered = [...data.tableData];
-    
-    // Log the initial data
-    console.log('Initial data dates:', filtered.map(row => row.date));
 
-    filtered = filtered.filter(row => {
-      if (typeof row.date !== 'string') return false;
-      
-      // Log each date check for EOD
-      if (timeRange === 'eod') {
-        console.log('EOD date check:', {
-          rowDate: row.date,
-          isIncluded: row.date === '01/07/2025'
-        });
-      }
-      
-      switch (timeRange) {
-        case 'eod':
-          return row.date === '07/01/2025';
-        case '7d': {
-          const [mm, dd, yyyy] = row.date.split('/').map(Number);
-          const rowDate = new Date(yyyy, mm - 1, dd);
-          const endDate = new Date('2025-01-07');
-          const startDate = new Date(endDate);
-          startDate.setDate(startDate.getDate() - 7);
-          return rowDate >= startDate && rowDate <= endDate;
-        }
-        case 'mtd': {
-          const [mm, dd, yyyy] = row.date.split('/').map(Number);
-          const rowDate = new Date(yyyy, mm - 1, dd);
-          const endDate = new Date('2025-01-07');
-          const startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-          return rowDate >= startDate && rowDate <= endDate;
-        }
-        case 'custom': {
-          const [mm, dd, yyyy] = row.date.split('/').map(Number);
-          const rowDate = new Date(yyyy, mm - 1, dd);
-          return rowDate.toDateString() === customDate.toDateString();
-        }
-        default:
-          return true;
-      }
-    });
+    // Always filter by buyer if it's not 'all'
+    if (buyer !== 'all') {
+      filtered = filtered.filter(row => row.mediaBuyer === buyer);
+    }
 
-    // Log the filtered results
-    console.log('Filtered data dates:', filtered.map(row => row.date));
-    
+    // Filter by offer if specified
+    if (offer !== 'all') {
+      filtered = filtered.filter(row => row.offer === offer);
+    }
+
+    // Filter by network if specified
+    if (network !== 'all') {
+      filtered = filtered.filter(row => row.network === network);
+    }
+
     return filtered;
-  }, [data.tableData, timeRange]);
+  }, [data.tableData, buyer, offer, network]);
 
   const sortedData = useMemo(() => {
     if (!sortConfig) return filteredData;
