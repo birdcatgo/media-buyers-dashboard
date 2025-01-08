@@ -193,6 +193,21 @@ export const getDefaultDates = (viewMode: 'yesterday' | 'mtd' | 'custom'): { sta
   }
 };
 
+const formatSafeDate = (date: Date | string): string => {
+  try {
+    if (date instanceof Date) {
+      return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}/${date.getFullYear()}`;
+    }
+    if (typeof date === 'string' && date.includes('/')) {
+      return date;
+    }
+    return '01/01/2025'; // Safe default
+  } catch (e) {
+    console.error('Date formatting error:', e);
+    return '01/01/2025'; // Safe default
+  }
+};
+
 export const useDashboardState = (initialBuyer: string) => {
   const [selectedBuyer, setSelectedBuyer] = useState(initialBuyer);
   const [dateRange, setDateRange] = useState<DateRange>(defaultDateRange);
@@ -206,9 +221,7 @@ export const useDashboardState = (initialBuyer: string) => {
       if (sheetData?.length) {
         const processedData = sheetData.map(row => ({
           ...row,
-          date: row.date instanceof Date 
-            ? `${row.date.getMonth() + 1}/${row.date.getDate()}/${row.date.getFullYear()}`
-            : row.date
+          date: formatSafeDate(row.date)
         }));
         setData({
           ...defaultData,
@@ -228,33 +241,10 @@ export const useDashboardState = (initialBuyer: string) => {
         const sheetData = await fetchGoogleSheetsData();
         if (!sheetData?.length) return;
 
-        // Check what the date looks like here
-        console.log('Raw sheet data:', sheetData[0]);
-
-        const processedData = sheetData.map(row => {
-          let dateStr = '';
-          if (row.date instanceof Date) {
-            dateStr = `${row.date.getMonth() + 1}/${row.date.getDate()}/${row.date.getFullYear()}`;
-          } else if (typeof row.date === 'string') {
-            if (row.date.includes('/')) {
-              dateStr = row.date;
-            } else {
-              const d = new Date(row.date);
-              dateStr = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
-            }
-          }
-
-          // Log the date transformation
-          console.log('Date transformation:', {
-            original: row.date,
-            processed: dateStr
-          });
-
-          return {
-            ...row,
-            date: dateStr
-          };
-        });
+        const processedData = sheetData.map(row => ({
+          ...row,
+          date: formatSafeDate(row.date)
+        }));
 
         setData({
           ...defaultData,
@@ -262,6 +252,7 @@ export const useDashboardState = (initialBuyer: string) => {
         });
 
       } catch (error) {
+        console.error('Data fetching error:', error);
         setData(defaultData);
       }
     };
