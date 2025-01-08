@@ -195,18 +195,37 @@ export const RawData = ({
       filtered = filtered.filter(row => row.mediaBuyer === buyer);
     }
 
-    // Filter by offer if specified
+    // Filter by date range
+    filtered = filtered.filter(row => {
+      if (typeof row.date !== 'string') return false;
+      const [day, month, year] = row.date.split('/').map(Number);
+      
+      switch (timeRange) {
+        case 'eod':
+          return day === 7 && month === 1 && year === 2025;
+        case '7d':
+          return month === 1 && year === 2025 && day <= 7;
+        case 'mtd':
+          return month === 1 && year === 2025 && day <= 7;
+        case 'custom': {
+          const rowDate = new Date(year, month - 1, day);
+          return rowDate.toDateString() === customDate.toDateString();
+        }
+        default:
+          return true;
+      }
+    });
+
+    // Apply other filters
     if (offer !== 'all') {
       filtered = filtered.filter(row => row.offer === offer);
     }
-
-    // Filter by network if specified
     if (network !== 'all') {
       filtered = filtered.filter(row => row.network === network);
     }
 
     return filtered;
-  }, [data.tableData, buyer, offer, network]);
+  }, [data.tableData, buyer, offer, network, timeRange, customDate]);
 
   const sortedData = useMemo(() => {
     if (!sortConfig) return filteredData;
