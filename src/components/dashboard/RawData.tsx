@@ -11,6 +11,8 @@ import { formatDollar } from '@/utils/formatters';
 
 type TimeRange = 'eod' | '7d' | 'mtd' | 'custom';
 
+const DEFAULT_DATE = new Date('2025-01-07T12:00:00Z');
+
 const DateRangeSelector = ({ 
   timeRange, 
   setTimeRange,
@@ -38,13 +40,11 @@ const DateRangeSelector = ({
       <input
         type="date"
         className="border rounded p-1"
-        value={customDate instanceof Date && !isNaN(customDate.getTime()) 
-          ? customDate.toISOString().split('T')[0] 
-          : '2025-01-07'}
+        defaultValue="2025-01-07"
         min="2025-01-01"
         max="2025-01-07"
         onChange={(e) => {
-          const date = new Date(e.target.value);
+          const date = new Date(`${e.target.value}T12:00:00Z`);
           if (!isNaN(date.getTime())) {
             setCustomDate(date);
           }
@@ -142,7 +142,7 @@ export const RawData = ({
   network = 'all'
 }: Props) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('eod');
-  const [customDate, setCustomDate] = useState(new Date('2025-01-06'));
+  const [customDate, setCustomDate] = useState<Date>(DEFAULT_DATE);
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: 'asc' | 'desc';
