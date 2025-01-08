@@ -190,6 +190,18 @@ export const RawData = ({
   const filteredData = useMemo(() => {
     let filtered = [...data.tableData];
 
+    // Special handling for ACA DQ Rev
+    filtered = filtered.map(row => {
+      if (row.network === 'Suited' && row.offer === 'Health' && row.adAccount === 'ACA DQ Rev') {
+        return {
+          ...row,
+          network: 'ACA',
+          offer: 'ACA'
+        };
+      }
+      return row;
+    });
+
     // Always filter by buyer if it's not 'all'
     if (buyer !== 'all') {
       filtered = filtered.filter(row => row.mediaBuyer === buyer);
