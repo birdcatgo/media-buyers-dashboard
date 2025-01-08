@@ -65,48 +65,6 @@ export const OfferDashboard = ({
     return Array.from(combinations).sort();
   }, [data.tableData]);
 
-  // Filter and prepare data for each network-offer
-  const offerData = useMemo(() => {
-    const filteredTableData = getFilteredData(data.tableData, timeRange);
-    
-    // First, map any Suited ACA to ACA ACA
-    const normalizedData = filteredTableData.map(row => ({
-      ...row,
-      network: (row.network === 'Suited' && row.offer === 'Health' && row.adAccount === 'ACA DQ Rev') ? 'ACA' : row.network,
-      offer: (row.network === 'Suited' && row.offer === 'Health' && row.adAccount === 'ACA DQ Rev') ? 'ACA' : row.offer
-    }));
-
-    // Then group by network-offer
-    return networkOffers.map(networkOffer => {
-      const [network, offer] = networkOffer.split(' - ');
-      
-      // Filter data for this network-offer combination
-      const filteredData = normalizedData.filter(row => {
-        // Special handling for ACA
-        if (network === 'ACA' && offer === 'ACA') {
-          return (row.network === 'ACA' && row.offer === 'ACA') || 
-                 (row.network === 'Suited' && row.offer === 'Health' && row.adAccount === 'ACA DQ Rev');
-        }
-        return row.network === network && row.offer === offer;
-      });
-
-      // Calculate metrics
-      const metrics = filteredData.reduce(
-        (acc, row) => ({
-          spend: acc.spend + row.adSpend,
-          revenue: acc.revenue + row.adRev,
-          profit: acc.profit + row.profit
-        }),
-        { spend: 0, revenue: 0, profit: 0 }
-      );
-
-      return {
-        name: networkOffer,
-        ...metrics
-      };
-    });
-  }, [data.tableData, networkOffers, timeRange]);
-
   // Add this new useMemo for the combined data
   const combinedData = useMemo(() => {
     const filteredTableData = getFilteredData(data.tableData, timeRange);
@@ -186,14 +144,13 @@ export const OfferDashboard = ({
         </Select>
       </div>
 
-      {/* Add Summary Chart */}
       <Card>
         <CardHeader>
           <CardTitle>All Offers Summary</CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Add Performance Table */}
-          <div className="mb-6 overflow-x-auto">
+          {/* Performance Table */}
+          <div className="mb-12 overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b">
@@ -220,21 +177,48 @@ export const OfferDashboard = ({
             </table>
           </div>
 
-          {/* Chart with adjusted legend */}
-          <div className="h-[400px] flex">
+          {/* Chart Title */}
+          <h3 className="text-lg font-semibold mb-6 text-center">
+            Daily Profit by Offer
+          </h3>
+
+          {/* Enhanced Main Chart */}
+          <div className="h-[500px] flex">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={combinedData}>
+              <LineChart 
+                data={combinedData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
+                <XAxis 
+                  dataKey="date" 
+                  tick={{ fontSize: 12 }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis 
+                  tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
+                  width={80}
+                />
                 <Tooltip 
-                  formatter={(value: number, name: string) => {
-                    // Show the full network-offer name and the value
-                    return [`$${value.toLocaleString()}`, name];
-                  }}
+                  formatter={(value: number, name: string) => [
+                    `$${value.toLocaleString()}`, 
+                    name
+                  ]}
                   labelFormatter={(label) => `Date: ${label}`}
                   wrapperStyle={{ fontSize: '12px' }}
                 />
+                <Legend 
+                  verticalAlign="bottom"
+                  height={48}
+                  wrapperStyle={{ 
+                    fontSize: '12px',
+                    paddingTop: '20px'
+                  }}
+                />
+                <ReferenceLine y={0} stroke="#666" />
                 {networkOffers.map((offer, index) => (
                   <Line
                     key={offer}
@@ -243,8 +227,8 @@ export const OfferDashboard = ({
                     name={offer}
                     stroke={`hsl(${(index * 360) / networkOffers.length}, 70%, 50%)`}
                     strokeWidth={2}
-                    dot
-                    hide={false}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
                   />
                 ))}
               </LineChart>
@@ -252,50 +236,6 @@ export const OfferDashboard = ({
           </div>
         </CardContent>
       </Card>
-
-      {/* Individual offer charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {offerData.map(({ name, data }) => (
-          <Card key={name}>
-            <CardHeader className="p-4">
-              <CardTitle className="text-sm font-medium">{name}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <div className="h-[200px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={data}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="date"
-                      tick={{ fontSize: 11 }}
-                      interval={0}
-                      angle={-45}
-                      textAnchor="end"
-                      height={50}
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 11 }}
-                      width={60}
-                    />
-                    <Tooltip 
-                      formatter={(value: number) => [`$${value.toLocaleString()}`, 'Profit']}
-                      labelFormatter={(label) => `Date: ${label}`}
-                      wrapperStyle={{ fontSize: '12px' }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="profit"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
     </div>
   );
 }; 
