@@ -11,18 +11,18 @@ import { formatDollar } from '@/utils/formatters';
 
 type TimeRange = 'eod' | '7d' | 'mtd' | 'custom';
 
-const DEFAULT_DATE = new Date('2025-01-07T12:00:00Z');
+const DEFAULT_DATE_STRING = '2025-01-07';
 
 const DateRangeSelector = ({ 
   timeRange, 
   setTimeRange,
-  customDate,
-  setCustomDate
+  customDateString,
+  setCustomDateString
 }: { 
   timeRange: TimeRange;
   setTimeRange: (value: TimeRange) => void;
-  customDate: Date;
-  setCustomDate: (date: Date) => void;
+  customDateString: string;
+  setCustomDateString: (date: string) => void;
 }) => (
   <div className="flex items-center gap-4">
     <select 
@@ -40,15 +40,10 @@ const DateRangeSelector = ({
       <input
         type="date"
         className="border rounded p-1"
-        defaultValue="2025-01-07"
+        value={customDateString}
         min="2025-01-01"
         max="2025-01-07"
-        onChange={(e) => {
-          const date = new Date(`${e.target.value}T12:00:00Z`);
-          if (!isNaN(date.getTime())) {
-            setCustomDate(date);
-          }
-        }}
+        onChange={(e) => setCustomDateString(e.target.value)}
       />
     )}
   </div>
@@ -142,7 +137,7 @@ export const RawData = ({
   network = 'all'
 }: Props) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('eod');
-  const [customDate, setCustomDate] = useState<Date>(DEFAULT_DATE);
+  const [customDateString, setCustomDateString] = useState(DEFAULT_DATE_STRING);
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: 'asc' | 'desc';
@@ -188,6 +183,14 @@ export const RawData = ({
       }
     });
   };
+
+  const customDate = useMemo(() => {
+    try {
+      return new Date(`${customDateString}T12:00:00Z`);
+    } catch {
+      return new Date('2025-01-07T12:00:00Z');
+    }
+  }, [customDateString]);
 
   const filteredData = useMemo(() => {
     let filtered = [...data.tableData];
@@ -300,8 +303,8 @@ export const RawData = ({
         <DateRangeSelector 
           timeRange={timeRange}
           setTimeRange={setTimeRange}
-          customDate={customDate}
-          setCustomDate={setCustomDate}
+          customDateString={customDateString}
+          setCustomDateString={setCustomDateString}
         />
         <FilterControls 
           data={data.tableData}
