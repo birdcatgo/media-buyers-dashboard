@@ -38,9 +38,11 @@ const DateRangeSelector = ({
       <input
         type="date"
         className="border rounded p-1"
-        value={customDate.toISOString().split('T')[0]}
+        value={customDate instanceof Date && !isNaN(customDate.getTime()) 
+          ? customDate.toISOString().split('T')[0] 
+          : '2025-01-07'}
         min="2025-01-01"
-        max="2025-01-06"
+        max="2025-01-07"
         onChange={(e) => {
           const date = new Date(e.target.value);
           if (!isNaN(date.getTime())) {
