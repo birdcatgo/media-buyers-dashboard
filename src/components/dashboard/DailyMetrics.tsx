@@ -107,11 +107,15 @@ export const DailyMetrics = ({
 
   const networkOfferPerformance = useMemo(() => {
     const byNetworkOffer = filteredData.reduce((acc, row) => {
-      const key = `${row.network} - ${row.offer}`;
+      // Normalize network and offer for Suited ACA
+      const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
+      const offer = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.offer;
+      const key = `${network} - ${offer}`;
+
       if (!acc[key]) {
         acc[key] = { 
-          network: row.network,
-          offer: row.offer,
+          network,
+          offer,
           profit: 0,
           spend: 0,
           revenue: 0

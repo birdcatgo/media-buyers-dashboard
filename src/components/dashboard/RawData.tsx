@@ -8,6 +8,7 @@ import { Download } from 'lucide-react';
 import Papa from 'papaparse';
 import { DashboardData } from '@/types/dashboard';
 import { formatDollar } from '@/utils/formatters';
+import { normalizeNetworkOffer } from '@/utils/dataUtils';
 
 type TimeRange = 'eod' | '7d' | 'mtd' | 'custom';
 
@@ -185,19 +186,7 @@ export const RawData = ({
   };
 
   const filteredData = useMemo(() => {
-    let filtered = [...data.tableData];
-
-    // Special handling for ACA DQ Rev
-    filtered = filtered.map(row => {
-      if (row.network === 'Suited' && row.offer === 'Health' && row.adAccount === 'ACA DQ Rev') {
-        return {
-          ...row,
-          network: 'ACA',
-          offer: 'ACA'
-        };
-      }
-      return row;
-    });
+    let filtered = [...data.tableData].map(normalizeNetworkOffer);
 
     // Always filter by buyer if it's not 'all'
     if (buyer !== 'all') {

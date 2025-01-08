@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import {
@@ -15,6 +15,7 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
+import { normalizeNetworkOffer } from '@/utils/dataUtils';
 
 interface ChartProps {
   data: {
@@ -124,6 +125,57 @@ const PerformanceChart = ({ data, title }: { data: any[], title: string }) => {
 };
 
 export const DashboardCharts = ({ data }: ChartProps) => {
+  // Normalize and combine the data
+  const processedData = useMemo(() => {
+    // Process daily data
+    const dailyMap = new Map<string, any>();
+    
+    data.dailyData.forEach(row => {
+      const key = row.date;
+      if (!dailyMap.has(key)) {
+        dailyMap.set(key, {
+          date: key,
+          revenue: 0,
+          adSpend: 0,
+          profit: 0
+        });
+      }
+      
+      const current = dailyMap.get(key)!;
+      // Always add the values, regardless of network/offer
+      current.revenue += row.revenue || 0;
+      current.adSpend += row.adSpend || 0;
+      current.profit += row.profit || 0;
+    });
+
+    // Process offer data
+    const offerMap = new Map<string, any>();
+    data.offerData.forEach(row => {
+      // Normalize the key for both ACA ACA and Suited ACA
+      const key = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA - ACA' : `${row.network} - ${row.offer}`;
+      
+      if (!offerMap.has(key)) {
+        offerMap.set(key, {
+          name: key,
+          revenue: 0,
+          profit: 0,
+          adSpend: 0
+        });
+      }
+      
+      const current = offerMap.get(key)!;
+      current.revenue += row.revenue || 0;
+      current.profit += row.profit || 0;
+      current.adSpend += row.adSpend || 0;
+    });
+
+    return {
+      dailyData: Array.from(dailyMap.values()),
+      offerData: Array.from(offerMap.values()),
+      networkData: data.networkData
+    };
+  }, [data]);
+
   return (
     <Tabs defaultValue="overview" className="space-y-4">
       <TabsList>
@@ -134,17 +186,17 @@ export const DashboardCharts = ({ data }: ChartProps) => {
 
       <TabsContent value="overview" className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
-          <DailyPerformanceChart data={data.dailyData} />
-          <PerformanceChart data={data.offerData} title="Performance by Offer" />
+          <DailyPerformanceChart data={processedData.dailyData} />
+          <PerformanceChart data={processedData.offerData} title="Performance by Offer" />
         </div>
       </TabsContent>
 
       <TabsContent value="offers">
-        <PerformanceChart data={data.offerData} title="Offer Performance" />
+        <PerformanceChart data={processedData.offerData} title="Offer Performance" />
       </TabsContent>
 
       <TabsContent value="networks">
-        <PerformanceChart data={data.networkData} title="Network Performance" />
+        <PerformanceChart data={processedData.networkData} title="Network Performance" />
       </TabsContent>
     </Tabs>
   );

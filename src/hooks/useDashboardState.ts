@@ -208,6 +208,41 @@ const formatSafeDate = (date: Date | string): string => {
   }
 };
 
+const processOverviewData = (data: any[]) => {
+  const combinedData = data.reduce((acc, row) => {
+    // Create a unique key that combines network, offer, and media buyer
+    let key = `${row.network}-${row.offer}-${row.mediaBuyer}`;
+    
+    // If it's Suited ACA, combine with ACA ACA
+    if (row.network === 'Suited' && row.offer === 'ACA') {
+      key = `ACA-ACA-${row.mediaBuyer}`;
+    }
+    
+    if (!acc[key]) {
+      acc[key] = {
+        network: row.network === 'Suited' && row.offer === 'ACA' ? 'ACA' : row.network,
+        offer: row.network === 'Suited' && row.offer === 'ACA' ? 'ACA' : row.offer,
+        mediaBuyer: row.mediaBuyer,
+        dailyAvg: 0,
+        yesterdayProfit: 0,
+        weekRoas: 0,
+        yesterdayRoas: 0,
+        adSpend: 0,
+        adRev: 0,
+        profit: 0
+      };
+    }
+    
+    acc[key].adSpend += row.adSpend;
+    acc[key].adRev += row.adRev;
+    acc[key].profit += row.profit;
+    
+    return acc;
+  }, {});
+
+  return Object.values(combinedData);
+};
+
 export const useDashboardState = (initialBuyer: string) => {
   const [selectedBuyer, setSelectedBuyer] = useState(initialBuyer);
   const [dateRange, setDateRange] = useState<DateRange>(defaultDateRange);
@@ -223,9 +258,14 @@ export const useDashboardState = (initialBuyer: string) => {
           ...row,
           date: formatSafeDate(row.date)
         }));
+
+        // Process the data to combine Suited ACA with ACA ACA
+        const combinedData = processOverviewData(processedData);
+
         setData({
           ...defaultData,
-          tableData: processedData
+          tableData: processedData,
+          overviewData: combinedData
         });
       }
     } catch (error) {

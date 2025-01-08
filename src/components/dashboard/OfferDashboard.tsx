@@ -55,7 +55,12 @@ export const OfferDashboard = ({
   const networkOffers = useMemo(() => {
     const combinations = new Set<string>();
     data.tableData.forEach(row => {
-      combinations.add(`${row.network} - ${row.offer}`);
+      // Special handling for Suited - ACA
+      if (row.network === 'Suited' && row.offer === 'ACA') {
+        combinations.add('ACA - ACA');
+      } else {
+        combinations.add(`${row.network} - ${row.offer}`);
+      }
     });
     return Array.from(combinations).sort();
   }, [data.tableData]);
@@ -108,7 +113,12 @@ export const OfferDashboard = ({
     const dailyTotals = new Map<string, Record<string, number>>();
     
     filteredTableData.forEach(row => {
-      const key = `${row.network} - ${row.offer}`;
+      let key = `${row.network} - ${row.offer}`;
+      // Special handling for Suited - ACA
+      if (row.network === 'Suited' && row.offer === 'ACA') {
+        key = 'ACA - ACA';
+      }
+
       if (!dailyTotals.has(row.date)) {
         dailyTotals.set(row.date, {});
       }
@@ -125,10 +135,8 @@ export const OfferDashboard = ({
         ...profits
       }))
       .sort((a, b) => {
-        const aDate = (a as { date: string }).date;
-        const bDate = (b as { date: string }).date;
-        const [aDay, aMonth] = aDate.split('/').map(Number);
-        const [bDay, bMonth] = bDate.split('/').map(Number);
+        const [aDay, aMonth] = a.date.split('/').map(Number);
+        const [bDay, bMonth] = b.date.split('/').map(Number);
         return (aMonth - bMonth) || (aDay - bDay);
       });
   }, [data.tableData, timeRange]);
@@ -136,20 +144,30 @@ export const OfferDashboard = ({
   // Add this at the top of the component, after the useMemos
   const sortedOfferPerformance = useMemo(() => {
     const filteredTableData = getFilteredData(data.tableData, timeRange);
-    return networkOffers.map(networkOffer => {
-      const [network, offer] = networkOffer.split(' - ');
-      const offerData = filteredTableData.filter(row => 
-        row.network === network && row.offer === offer
-      );
-      
-      return {
-        name: networkOffer,
-        profit: offerData.reduce((sum, row) => sum + row.profit, 0),
-        revenue: offerData.reduce((sum, row) => sum + row.adRev, 0),
-        spend: offerData.reduce((sum, row) => sum + row.adSpend, 0)
-      };
-    }).sort((a, b) => b.profit - a.profit); // Sort by profit descending
-  }, [data.tableData, networkOffers, timeRange]);
+    const metrics = new Map<string, { spend: number; revenue: number; profit: number }>();
+
+    filteredTableData.forEach(row => {
+      let key = `${row.network} - ${row.offer}`;
+      // Special handling for Suited - ACA
+      if (row.network === 'Suited' && row.offer === 'ACA') {
+        key = 'ACA - ACA';
+      }
+
+      const current = metrics.get(key) || { spend: 0, revenue: 0, profit: 0 };
+      metrics.set(key, {
+        spend: current.spend + row.adSpend,
+        revenue: current.revenue + row.adRev,
+        profit: current.profit + row.profit
+      });
+    });
+
+    return Array.from(metrics.entries())
+      .map(([name, values]) => ({
+        name,
+        ...values
+      }))
+      .sort((a, b) => b.profit - a.profit);
+  }, [data.tableData, timeRange]);
 
   return (
     <div className="space-y-6">

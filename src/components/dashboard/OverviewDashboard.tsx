@@ -108,11 +108,17 @@ export const OverviewDashboard = ({
     data.tableData.forEach(row => {
       if (typeof row.date !== 'string') return;
       const date = parseDateString(row.date);
-      const key = `${row.network}-${row.offer}-${row.mediaBuyer}`;
+      
+      // Normalize the network and offer for Suited ACA
+      const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
+      const offer = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.offer;
+      
+      // Create key with normalized values
+      const key = `${network}-${offer}-${row.mediaBuyer}`;
       
       const current = groups.get(key) || {
-        network: row.network,
-        offer: row.offer,
+        network,  // Use normalized network
+        offer,    // Use normalized offer
         mediaBuyer: row.mediaBuyer,
         weekData: [],
         yesterdayData: []
@@ -123,7 +129,11 @@ export const OverviewDashboard = ({
         rowDate: date.toISOString(),
         isYesterday: date.getTime() === yesterday.getTime(),
         isInWeek: isDateInRange(date, weekStart, yesterday),
-        key
+        key,
+        originalNetwork: row.network,
+        normalizedNetwork: network,
+        originalOffer: row.offer,
+        normalizedOffer: offer
       });
 
       if (date.getTime() === yesterday.getTime()) {

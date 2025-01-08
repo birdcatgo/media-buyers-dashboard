@@ -4,6 +4,7 @@ import React from 'react';
 import { Card, CardContent } from '../ui/card';
 import { DollarSign, TrendingUp, PieChart, BarChart2 } from 'lucide-react';
 import { DashboardData } from '../../types/dashboard';
+import { normalizeNetworkOffer } from '@/utils/dataUtils';
 
 interface MetricCardProps {
   title: string;
@@ -42,10 +43,11 @@ interface DashboardMetricsProps {
 }
 
 export const DashboardMetrics = ({ data }: DashboardMetricsProps) => {
-  // Calculate total metrics from the daily data
-  const totalAdSpend = data.dailyData.reduce((sum, day) => sum + day.adSpend, 0);
-  const totalRevenue = data.dailyData.reduce((sum, day) => sum + day.revenue, 0);
-  const totalProfit = data.dailyData.reduce((sum, day) => sum + day.profit, 0);
+  // Calculate total metrics from the normalized daily data
+  const normalizedData = data.dailyData.map(normalizeNetworkOffer);
+  const totalAdSpend = normalizedData.reduce((sum, day) => sum + day.adSpend, 0);
+  const totalRevenue = normalizedData.reduce((sum, day) => sum + day.revenue, 0);
+  const totalProfit = normalizedData.reduce((sum, day) => sum + day.profit, 0);
   const roi = totalAdSpend > 0 ? ((totalProfit / totalAdSpend) * 100).toFixed(1) : 0;
 
   return (

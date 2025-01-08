@@ -199,8 +199,11 @@ export const MonthlyMetrics = ({
   // Offer performance array for bar chart
   const offerPerformance = useMemo(() => {
     const byOffer = filteredData.reduce((acc, row) => {
+      // Normalize network and offer for Suited ACA
+      const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
+      const offer = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.offer;
       // Combine network and offer for the key
-      const key = `${row.network} - ${row.offer}`;
+      const key = `${network} - ${offer}`;
       
       if (!acc[key]) {
         acc[key] = { 
@@ -218,7 +221,7 @@ export const MonthlyMetrics = ({
 
     // Convert to array and sort by profit
     return Object.values(byOffer)
-      .sort((a, b) => b.profit - a.profit); // Sort by profit descending
+      .sort((a, b) => b.profit - a.profit);
   }, [filteredData]);
 
   // Buyer performance array for table or bar chart

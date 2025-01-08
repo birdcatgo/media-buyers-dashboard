@@ -7,6 +7,7 @@ import { RawData } from './RawData';
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { formatDollar } from '@/utils/formatters';
+import { normalizeNetworkOffer } from '@/utils/dataUtils';
 
 type TimeRange = 'eod' | 'mtd' | '7d' | '60d' | '90d';
 
@@ -190,6 +191,13 @@ const DateRangeSelector = ({ timeRange, setTimeRange }: {
   </div>
 );
 
+interface PerformanceItem {
+  profit: number;
+  spend: number;
+  revenue: number;
+  name: string;
+}
+
 export const BuyerDashboard = ({ 
   buyer, 
   data,
@@ -240,8 +248,7 @@ export const BuyerDashboard = ({
   }, [filteredData, timeRange]);
 
   const { offerPerformance, accountPerformance } = useMemo(() => {
-    const byOffer = filteredData.reduce((acc, row) => {
-      // Use combination of network and offer without hyphen
+    const byOffer = filteredData.map(normalizeNetworkOffer).reduce((acc, row) => {
       const key = `${row.network} ${row.offer}`;
       
       if (!acc[key]) {
@@ -252,16 +259,13 @@ export const BuyerDashboard = ({
           revenue: 0 
         };
       }
+      
       acc[key].profit += row.profit;
       acc[key].spend += row.adSpend;
       acc[key].revenue += row.adRev;
+      
       return acc;
-    }, {} as Record<string, { 
-      name: string; 
-      profit: number; 
-      spend: number; 
-      revenue: number; 
-    }>);
+    }, {});
 
     const byAccount = filteredData.reduce((acc, row) => {
       if (!acc[row.adAccount]) {
@@ -284,8 +288,8 @@ export const BuyerDashboard = ({
     }>);
 
     return {
-      offerPerformance: Object.values(byOffer).sort((a, b) => b.profit - a.profit),
-      accountPerformance: Object.values(byAccount).sort((a, b) => b.profit - a.profit)
+      offerPerformance: (Object.values(byOffer) as PerformanceItem[]).sort((a, b) => b.profit - a.profit),
+      accountPerformance: (Object.values(byAccount) as PerformanceItem[]).sort((a, b) => b.profit - a.profit)
     };
   }, [filteredData]);
 

@@ -27,6 +27,7 @@ export interface DashboardData {
     offerData: PerformanceData[];
     networkData: PerformanceData[];
     tableData: TableData[];
+    overviewData?: any[];
 }
 
 export type UserRole = 'admin' | 'media_buyer' | 'viewer';
