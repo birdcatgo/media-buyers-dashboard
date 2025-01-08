@@ -117,8 +117,8 @@ export const MonthlyMetrics = ({
     filtered = filtered.filter(row => {
       try {
         if (typeof row.date !== 'string') return false;
-        const [month, day, year] = row.date.split('/').map(Number);
-        return month === 1 && year === 2025;
+        const [day, month, year] = row.date.split('/').map(Number);
+        return month === 1 && year === 2025 && day <= 7; // Include up to January 7th
       } catch (e) {
         console.error('Error parsing date:', row.date);
         return false;
@@ -176,7 +176,7 @@ export const MonthlyMetrics = ({
 
     // Fill in missing dates with zero profit
     const startDate = new Date(2025, 0, 1);  // January 1st, 2025
-    const endDate = new Date(2025, 0, 6);    // January 6th, 2025
+    const endDate = new Date(2025, 0, 7);    // Changed to January 7th, 2025
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const formattedDate = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}`;
