@@ -63,51 +63,42 @@ export const OfferDashboard = ({
   // Filter and prepare data for each network-offer
   const offerData = useMemo(() => {
     const filteredTableData = getFilteredData(data.tableData, timeRange);
+    
+    // First, map any Suited ACA to ACA ACA
+    const normalizedData = filteredTableData.map(row => ({
+      ...row,
+      network: (row.network === 'Suited' && row.offer === 'Health' && row.adAccount === 'ACA DQ Rev') ? 'ACA' : row.network,
+      offer: (row.network === 'Suited' && row.offer === 'Health' && row.adAccount === 'ACA DQ Rev') ? 'ACA' : row.offer
+    }));
+
+    // Then group by network-offer
     return networkOffers.map(networkOffer => {
       const [network, offer] = networkOffer.split(' - ');
       
-      // Filter data for this network-offer
-      const filteredData = filteredTableData.filter(row => 
-        row.network === network && row.offer === offer
-      );
-
-      // Group by date and calculate daily metrics
-      const dailyData = filteredData.reduce((acc, row) => {
-        if (!acc[row.date]) {
-          acc[row.date] = {
-            date: row.date,
-            spend: 0,
-            revenue: 0,
-            profit: 0
-          };
+      // Filter data for this network-offer combination
+      const filteredData = normalizedData.filter(row => {
+        // Special handling for ACA
+        if (network === 'ACA' && offer === 'ACA') {
+          return (row.network === 'ACA' && row.offer === 'ACA') || 
+                 (row.network === 'Suited' && row.offer === 'Health' && row.adAccount === 'ACA DQ Rev');
         }
-        acc[row.date].spend += row.adSpend;
-        acc[row.date].revenue += row.adRev;
-        acc[row.date].profit += row.profit;
-        return acc;
-      }, {} as Record<string, any>);
+        return row.network === network && row.offer === offer;
+      });
 
-      // Calculate total profit for sorting
-      const totalProfit = filteredData.reduce((sum, row) => sum + row.profit, 0);
+      // Calculate metrics
+      const metrics = filteredData.reduce(
+        (acc, row) => ({
+          spend: acc.spend + row.adSpend,
+          revenue: acc.revenue + row.adRev,
+          profit: acc.profit + row.profit
+        }),
+        { spend: 0, revenue: 0, profit: 0 }
+      );
 
       return {
         name: networkOffer,
-        data: Object.values(dailyData).sort((a, b) => {
-          const aDate = (a as { date: string }).date;
-          const bDate = (b as { date: string }).date;
-          const [aDay, aMonth] = aDate.split('/').map(Number);
-          const [bDay, bMonth] = bDate.split('/').map(Number);
-          return (aMonth - bMonth) || (aDay - bDay);
-        }),
-        totalProfit // Add total profit for sorting
+        ...metrics
       };
-    }).sort((a, b) => {
-      // Sort by whether they have data first, then by total profit
-      const aHasData = a.data.length > 0;
-      const bHasData = b.data.length > 0;
-      if (aHasData && !bHasData) return -1;
-      if (!aHasData && bHasData) return 1;
-      return b.totalProfit - a.totalProfit;
     });
   }, [data.tableData, networkOffers, timeRange]);
 
