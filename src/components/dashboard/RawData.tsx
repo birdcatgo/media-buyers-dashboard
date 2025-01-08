@@ -184,14 +184,6 @@ export const RawData = ({
     });
   };
 
-  const customDate = useMemo(() => {
-    try {
-      return new Date(`${customDateString}T12:00:00Z`);
-    } catch {
-      return new Date('2025-01-07T12:00:00Z');
-    }
-  }, [customDateString]);
-
   const filteredData = useMemo(() => {
     let filtered = [...data.tableData];
 
@@ -224,10 +216,8 @@ export const RawData = ({
           return month === 1 && year === 2025 && day <= 7;
         case 'mtd':
           return month === 1 && year === 2025 && day <= 7;
-        case 'custom': {
-          const rowDate = new Date(year, month - 1, day);
-          return rowDate.toDateString() === customDate.toDateString();
-        }
+        case 'custom':
+          return row.date === customDateString.split('-').reverse().join('/');
         default:
           return true;
       }
@@ -242,7 +232,7 @@ export const RawData = ({
     }
 
     return filtered;
-  }, [data.tableData, buyer, offer, network, timeRange, customDate]);
+  }, [data.tableData, buyer, offer, network, timeRange, customDateString]);
 
   const sortedData = useMemo(() => {
     if (!sortConfig) return filteredData;
