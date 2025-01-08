@@ -14,9 +14,14 @@ export const DataDebugger: React.FC<DataDebuggerProps> = ({ data, componentName,
       dataLength: data?.length,
       isArray: Array.isArray(data),
       firstRow: data?.[0],
-      firstRowDate: data?.[0]?.date,
+      firstRowDate: data?.[0]?.date 
+        ? (typeof data[0].date === 'string' 
+          ? data[0].date 
+          : data[0].date instanceof Date 
+            ? data[0].date.toLocaleDateString()
+            : 'invalid date')
+        : 'no date',
       firstRowDateType: data?.[0]?.date ? typeof data[0].date : 'no data',
-      isFirstRowDateInstance: data?.[0]?.date ? Object.prototype.toString.call(data[0].date) === '[object Date]' : false,
       stack: new Error().stack
     });
   }, [data, componentName]);
