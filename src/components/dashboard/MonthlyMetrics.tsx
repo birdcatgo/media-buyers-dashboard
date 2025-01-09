@@ -113,12 +113,26 @@ export const MonthlyMetrics = ({
   const filteredData = useMemo(() => {
     let filtered = [...data.tableData];
 
-    // Filter for January 2025 only
+    // Filter for January 2025
     filtered = filtered.filter(row => {
       try {
         if (typeof row.date !== 'string') return false;
-        const [day, month, year] = row.date.split('/').map(Number);
-        return month === 1 && year === 2025 && day <= 7; // Include up to January 7th
+        
+        // Parse date assuming MM/DD/YYYY format
+        const [month, day, year] = row.date.split('/').map(Number);
+        
+        // Get the latest date in the dataset for MTD
+        const latestDate = filtered.reduce((latest, r) => {
+          const [m, d, y] = r.date.split('/').map(Number);
+          const currentDate = new Date(y, m - 1, d);
+          return currentDate > latest ? currentDate : latest;
+        }, new Date(0));
+
+        // Create date objects for comparison
+        const rowDate = new Date(year, month - 1, day);
+        const startDate = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
+
+        return rowDate >= startDate && rowDate <= latestDate;
       } catch (e) {
         console.error('Error parsing date:', row.date);
         return false;
@@ -130,8 +144,36 @@ export const MonthlyMetrics = ({
       filtered = filtered.filter((row) => row.mediaBuyer === buyer);
     }
 
+    // Add duplicate checking
+    const dateCount = filtered.reduce((acc, row) => {
+      acc[row.date] = (acc[row.date] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Log date distribution
+    console.log('MTD Date Distribution:', {
+      totalRows: filtered.length,
+      byDate: Object.entries(dateCount).sort().map(([date, count]) => ({
+        date,
+        count,
+        rows: filtered.filter(row => row.date === date).map(row => ({
+          mediaBuyer: row.mediaBuyer,
+          offer: row.offer,
+          network: row.network,
+          profit: row.profit
+        }))
+      }))
+    });
+
     return filtered;
   }, [data.tableData, buyer]);
+
+  // Add debug logging
+  console.log('MTD Data:', {
+    totalRows: filteredData.length,
+    uniqueDates: Array.from(new Set(filteredData.map(row => row.date))).sort(),
+    sampleRow: filteredData[0]
+  });
 
   // Aggregate spend/revenue/profit
   const metrics = useMemo(() => {
@@ -145,55 +187,55 @@ export const MonthlyMetrics = ({
     );
   }, [filteredData]);
 
-  // Build dailyTrendData, ensuring `date` is always a string
+  // Build dailyTrendData with proper aggregation
   const dailyTrendData = useMemo(() => {
-    const parseDate = (dateStr: string | Date) => {
-      if (dateStr instanceof Date) return dateStr;
-      
-      // Parse DD/MM/YYYY format (changed from MM/DD/YYYY)
-      const [day, month, year] = dateStr.split('/').map(Number);
-      return new Date(year, month - 1, day);
-    };
-
-    const dailyProfits = new Map();
+    // Create a map to aggregate data by date
+    const dailyTotals = new Map<string, {
+      date: string;
+      profit: number;
+      spend: number;
+      revenue: number;
+      count: number;
+    }>();
 
     // Process each row
     filteredData.forEach(row => {
-      try {
-        const date = parseDate(row.date);
-        // Format as DD/MM/YYYY to match input format
-        const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
-        
-        const currentProfit = dailyProfits.get(formattedDate)?.profit || 0;
-        dailyProfits.set(formattedDate, {
-          date: formattedDate,
-          profit: currentProfit + Number(row.profit)
-        });
-      } catch (e) {
-        console.error('Error processing row:', row, e);
-      }
+      const date = row.date;
+      const current = dailyTotals.get(date) || {
+        date,
+        profit: 0,
+        spend: 0,
+        revenue: 0,
+        count: 0
+      };
+
+      current.profit += row.profit;
+      current.spend += row.adSpend;
+      current.revenue += row.adRev;
+      current.count += 1;
+
+      dailyTotals.set(date, current);
     });
 
-    // Fill in missing dates with zero profit
-    const startDate = new Date(2025, 0, 1);  // January 1st, 2025
-    const endDate = new Date(2025, 0, 7);    // January 7th, 2025
-
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const formattedDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
-      if (!dailyProfits.has(formattedDate)) {
-        dailyProfits.set(formattedDate, {
-          date: formattedDate,
-          profit: 0
-        });
-      }
-    }
-
-    return Array.from(dailyProfits.values())
+    // Convert to array and sort by date
+    const sortedData = Array.from(dailyTotals.values())
       .sort((a, b) => {
-        const dateA = parseDate(a.date);
-        const dateB = parseDate(b.date);
-        return dateA.getTime() - dateB.getTime();
+        const [aMonth, aDay, aYear] = a.date.split('/').map(Number);
+        const [bMonth, bDay, bYear] = b.date.split('/').map(Number);
+        return new Date(aYear, aMonth - 1, aDay).getTime() - 
+               new Date(bYear, bMonth - 1, bDay).getTime();
       });
+
+    console.log('Daily Trend Data:', {
+      dates: sortedData.map(d => d.date),
+      totals: sortedData.map(d => ({
+        date: d.date,
+        profit: d.profit,
+        rowCount: d.count
+      }))
+    });
+
+    return sortedData;
   }, [filteredData]);
 
   // Offer performance array for bar chart

@@ -85,41 +85,9 @@ const DailyProfitChart = ({ data, timeRange, setTimeRange }: {
   setTimeRange: (value: TimeRange) => void;
 }) => {
   const filteredData = useMemo(() => {
-    // Parse DD/MM/YYYY string to Date
-    const parseDate = (dateStr: string) => {
-      const [day, month, year] = dateStr.split('/').map(Number);
-      return new Date(year, month - 1, day);
-    };
-
-    // Get reference dates
-    const endDate = new Date(2025, 0, 7);  // January 7th, 2025
-    let startDate = new Date(2025, 0, 1);  // January 1st, 2025
-
-    // Calculate start date based on timeRange
-    switch (timeRange) {
-      case 'mtd':
-        startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-        break;
-      case '7d':
-        startDate = new Date(endDate);
-        startDate.setDate(startDate.getDate() - 7);
-        break;
-      case '60d':
-        startDate = new Date(endDate);
-        startDate.setDate(startDate.getDate() - 60);
-        break;
-      case '90d':
-        startDate = new Date(endDate);
-        startDate.setDate(startDate.getDate() - 90);
-        break;
-    }
-
-    return data.filter(item => {
-      if (!item.date) return false;
-      const itemDate = parseDate(item.date);
-      return itemDate >= startDate && itemDate <= endDate;
-    });
-  }, [data, timeRange]);
+    // Remove this date filtering since data is already filtered
+    return data;
+  }, [data]);
 
   return (
     <Card>
@@ -149,6 +117,11 @@ const DailyProfitChart = ({ data, timeRange, setTimeRange }: {
                 angle={-45}
                 textAnchor="end"
                 height={60}
+                // Add this to debug XAxis values
+                tickFormatter={(value) => {
+                  console.log('XAxis tick:', value);
+                  return value;
+                }}
               />
               <YAxis 
                 tickFormatter={(value) => formatDollar(value)}
@@ -211,9 +184,18 @@ export const BuyerDashboard = ({
     return data.tableData.filter(row => {
       if (typeof row.date !== 'string') return false;
       
-      // Parse DD/MM/YYYY format
-      const [day, month, year] = row.date.split('/').map(Number);
-      return month === 1 && year === 2025 && day <= 7 && row.mediaBuyer === buyer;
+      // Parse MM/DD/YYYY format
+      const [month, day, year] = row.date.split('/').map(Number);
+
+      // Add debug logging
+      console.log('Filtering row:', {
+        date: row.date,
+        parsed: { month, day, year },
+        mediaBuyer: row.mediaBuyer,
+        isMatch: month === 1 && year === 2025 && row.mediaBuyer === buyer
+      });
+
+      return month === 1 && year === 2025 && row.mediaBuyer === buyer;
     });
   }, [data.tableData, buyer]);
 
@@ -221,20 +203,32 @@ export const BuyerDashboard = ({
     // Use the same date filtering logic as filteredData
     const mtdData = filteredData.filter(row => {
       if (typeof row.date !== 'string') return false;
-      const [day, month, year] = row.date.split('/').map(Number);
+      const [month, day, year] = row.date.split('/').map(Number);
       
+      // Add debug logging
+      console.log('Metrics filtering:', {
+        date: row.date,
+        timeRange,
+        parsed: { month, day, year }
+      });
+
       switch (timeRange) {
         case 'eod':
-          return day === 7 && month === 1 && year === 2025;
-        case '7d': {
-          return day <= 7 && month === 1 && year === 2025;
-        }
-        case 'mtd': {
-          return month === 1 && year === 2025 && day <= 7;
-        }
+          return month === 1 && day === 8 && year === 2025; // Show January 8th
+        case '7d':
+          return month === 1 && year === 2025 && day >= 1 && day <= 8; // Show Jan 1-8
+        case 'mtd':
+          return month === 1 && year === 2025; // Show all of January
         default:
           return true;
       }
+    });
+
+    // Log filtered data
+    console.log('Metrics data:', {
+      timeRange,
+      totalRows: mtdData.length,
+      uniqueDates: Array.from(new Set(mtdData.map(row => row.date))).sort()
     });
 
     return mtdData.reduce(
@@ -294,22 +288,15 @@ export const BuyerDashboard = ({
   }, [filteredData]);
 
   const dailyProfitData = useMemo(() => {
-    const parseDate = (dateStr: string | Date) => {
-      if (dateStr instanceof Date) return dateStr;
-      
-      // Parse DD/MM/YYYY format
-      const [day, month, year] = dateStr.split('/').map(Number);
-      return new Date(year, month - 1, day);
-    };
-
     const dailyProfits = new Map();
 
     // Process each row
     filteredData.forEach(row => {
       try {
-        const date = parseDate(row.date);
-        // Format as DD/MM/YYYY
-        const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+        // Using MM/DD/YYYY format
+        const [month, day, year] = row.date.split('/').map(Number);
+        const date = new Date(year, month - 1, day);
+        const formattedDate = row.date; // Keep original MM/DD/YYYY format
         
         const currentProfit = dailyProfits.get(formattedDate)?.profit || 0;
         dailyProfits.set(formattedDate, {
@@ -321,12 +308,12 @@ export const BuyerDashboard = ({
       }
     });
 
-    // Fill in missing dates with zero profit
-    const startDate = new Date(2025, 0, 1);  // January 1st, 2025
-    const endDate = new Date(2025, 0, 7);    // January 7th, 2025
+    // Fill in missing dates
+    const startDate = new Date(2025, 0, 1); // January 1st, 2025
+    const endDate = new Date(2025, 0, 8);   // January 8th, 2025
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const formattedDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+      const formattedDate = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}`;
       if (!dailyProfits.has(formattedDate)) {
         dailyProfits.set(formattedDate, {
           date: formattedDate,
@@ -335,10 +322,18 @@ export const BuyerDashboard = ({
       }
     }
 
+    // Log daily profits
+    console.log('Daily Profits:', {
+      dates: Array.from(dailyProfits.keys()).sort(),
+      sampleValues: Array.from(dailyProfits.values()).slice(0, 3)
+    });
+
     return Array.from(dailyProfits.values())
       .sort((a, b) => {
-        const dateA = parseDate(a.date);
-        const dateB = parseDate(b.date);
+        const [aMonth, aDay, aYear] = a.date.split('/').map(Number);
+        const [bMonth, bDay, bYear] = b.date.split('/').map(Number);
+        const dateA = new Date(aYear, aMonth - 1, aDay);
+        const dateB = new Date(bYear, bMonth - 1, bDay);
         return dateA.getTime() - dateB.getTime();
       });
   }, [filteredData]);

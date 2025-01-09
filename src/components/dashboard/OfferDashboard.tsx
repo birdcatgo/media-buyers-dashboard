@@ -15,33 +15,103 @@ type DataPoint = {
   revenue: number;
 };
 
-// First, add the date filtering function
-const getFilteredData = (data: any[], timeRange: TimeRange) => {
-  return data.filter(row => {
-    if (typeof row.date !== 'string') return false;
-    
-    // Parse DD/MM/YYYY format
-    const [day, month, year] = row.date.split('/').map(Number);
-    
-    switch (timeRange) {
-      case 'eod':
-        return day === 7 && month === 1 && year === 2025;  // January 7th, 2025
-      case '7d': {
-        // Include data from Jan 1-7
-        return month === 1 && year === 2025 && day <= 7;
+// Add this helper function at the top
+const validateDates = (data: any[]) => {
+  const dateMap = new Map<string, any[]>();
+  const invalidDates: any[] = [];
+
+  data.forEach(row => {
+    try {
+      if (typeof row.date !== 'string') {
+        invalidDates.push(row);
+        return;
       }
-      case 'mtd': {
-        // Include all January data up to the 7th
-        return month === 1 && year === 2025 && day <= 7;
+
+      const [month, day, year] = row.date.split('/').map(Number);
+      const date = new Date(year, month - 1, day);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        invalidDates.push(row);
+        return;
       }
-      case '90d': {
-        // For now, just show January data since that's all we have
-        return month === 1 && year === 2025 && day <= 7;
+
+      const key = row.date;
+      if (!dateMap.has(key)) {
+        dateMap.set(key, []);
       }
-      default:
-        return true;
+      dateMap.get(key)?.push(row);
+    } catch (e) {
+      invalidDates.push(row);
     }
   });
+
+  return {
+    validDates: Array.from(dateMap.entries()).map(([date, rows]) => ({
+      date,
+      rowCount: rows.length,
+      sampleRows: rows.slice(0, 2)
+    })),
+    invalidDates,
+    dateDistribution: Array.from(dateMap.keys()).sort(),
+    summary: {
+      totalRows: data.length,
+      validRows: data.length - invalidDates.length,
+      uniqueDates: dateMap.size
+    }
+  };
+};
+
+// Update getFilteredData with logging
+const getFilteredData = (data: any[], timeRange: TimeRange) => {
+  const filtered = data.filter(row => {
+    if (typeof row.date !== 'string') return false;
+    
+    const [month, day, year] = row.date.split('/').map(Number);
+    
+    // Log any parsing issues
+    if (isNaN(month) || isNaN(day) || isNaN(year)) {
+      console.warn('Invalid date format:', row.date);
+      return false;
+    }
+
+    const result = (() => {
+      switch (timeRange) {
+        case 'eod':
+          return month === 1 && day === 8 && year === 2025;
+        case '7d':
+          return month === 1 && year === 2025 && day >= 1 && day <= 8;
+        case 'mtd':
+          return month === 1 && year === 2025;
+        case '90d':
+          return ((month === 12 && year === 2024) || 
+                  (month === 1 && year === 2025));
+        default:
+          return true;
+      }
+    })();
+
+    // Log filtered dates
+    if (result) {
+      console.log('Including date:', {
+        original: row.date,
+        parsed: { month, day, year },
+        timeRange
+      });
+    }
+
+    return result;
+  });
+
+  // Log filtering results
+  console.log('Filtered Results:', {
+    timeRange,
+    totalRows: data.length,
+    filteredRows: filtered.length,
+    uniqueDates: Array.from(new Set(filtered.map(row => row.date))).sort()
+  });
+
+  return filtered;
 };
 
 export const OfferDashboard = ({
@@ -50,6 +120,9 @@ export const OfferDashboard = ({
   data: DashboardData;
 }) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('mtd');
+
+  // Add date validation logging
+  console.log('Date Validation:', validateDates(data.tableData));
 
   // Get unique network-offer combinations
   const networkOffers = useMemo(() => {
@@ -70,9 +143,15 @@ export const OfferDashboard = ({
     const filteredTableData = getFilteredData(data.tableData, timeRange);
     const dailyTotals = new Map<string, Record<string, number>>();
     
+    // Debug log
+    console.log('Filtered data:', {
+      total: filteredTableData.length,
+      uniqueDates: Array.from(new Set(filteredTableData.map(row => row.date))).sort(),
+      sampleRow: filteredTableData[0]
+    });
+    
     filteredTableData.forEach(row => {
       let key = `${row.network} - ${row.offer}`;
-      // Special handling for Suited - ACA
       if (row.network === 'Suited' && row.offer === 'ACA') {
         key = 'ACA - ACA';
       }
@@ -93,9 +172,11 @@ export const OfferDashboard = ({
         ...profits
       }))
       .sort((a, b) => {
-        const [aDay, aMonth] = a.date.split('/').map(Number);
-        const [bDay, bMonth] = b.date.split('/').map(Number);
-        return (aMonth - bMonth) || (aDay - bDay);
+        const [aMonth, aDay, aYear] = a.date.split('/').map(Number);
+        const [bMonth, bDay, bYear] = b.date.split('/').map(Number);
+        const dateA = new Date(aYear, aMonth - 1, aDay);
+        const dateB = new Date(bYear, bMonth - 1, bDay);
+        return dateA.getTime() - dateB.getTime();
       });
   }, [data.tableData, timeRange]);
 

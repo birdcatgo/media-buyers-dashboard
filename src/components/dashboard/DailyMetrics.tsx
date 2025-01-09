@@ -13,7 +13,7 @@ export const DailyMetrics = ({
   data: DashboardData;
 }) => {
   // Get the latest date and filter data
-  const filteredData = useMemo(() => {
+  const { filteredData, latestDate } = useMemo(() => {
     let filtered = [...data.tableData];
 
     // Find the latest date in the dataset
@@ -27,11 +27,28 @@ export const DailyMetrics = ({
     const formattedLatestDate = `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`;
 
     // Filter for only the latest date and apply other filters
-    return filtered.filter(row => 
-      row.date === formattedLatestDate && 
-      (buyer === 'all' || row.mediaBuyer === buyer)
-    );
+    return {
+      filteredData: filtered.filter(row => 
+        row.date === formattedLatestDate && 
+        (buyer === 'all' || row.mediaBuyer === buyer)
+      ),
+      latestDate
+    };
   }, [data.tableData, buyer]);
+
+  // Format the date for display
+  const dateDisplay = useMemo(() => {
+    const today = new Date();
+    const isToday = latestDate.getDate() === today.getDate() &&
+                    latestDate.getMonth() === today.getMonth() &&
+                    latestDate.getFullYear() === today.getFullYear();
+    
+    const isYesterday = latestDate.getDate() === today.getDate() - 1 &&
+                       latestDate.getMonth() === today.getMonth() &&
+                       latestDate.getFullYear() === today.getFullYear();
+
+    return isToday ? "Today" : isYesterday ? "Yesterday" : "Latest Day";
+  }, [latestDate]);
 
   // Calculate metrics for the latest day only
   const metrics = useMemo(() => {
@@ -140,17 +157,17 @@ export const DailyMetrics = ({
       {/* Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <MetricCard
-          title="Daily Spend"
+          title={`${dateDisplay}'s Spend`}
           value={metrics.spend}
           icon={<DollarSign className="h-6 w-6" />}
         />
         <MetricCard
-          title="Daily Revenue"
+          title={`${dateDisplay}'s Revenue`}
           value={metrics.revenue}
           icon={<TrendingUp className="h-6 w-6" />}
         />
         <MetricCard
-          title="Daily Profit"
+          title={`${dateDisplay}'s Profit`}
           value={metrics.profit}
           icon={<PieChart className="h-6 w-6" />}
         />
@@ -159,7 +176,7 @@ export const DailyMetrics = ({
       {/* Media Buyer Summary Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Daily Media Buyer Summary</CardTitle>
+          <CardTitle>{dateDisplay}'s Media Buyer Summary</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -194,7 +211,7 @@ export const DailyMetrics = ({
       {/* Network Offer Summary Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Daily Network Offer Summary</CardTitle>
+          <CardTitle>{dateDisplay}'s Network Offer Summary</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
