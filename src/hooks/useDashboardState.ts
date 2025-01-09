@@ -254,10 +254,29 @@ export const useDashboardState = (initialBuyer: string) => {
     try {
       const sheetData = await fetchGoogleSheetsData();
       if (sheetData?.length) {
-        const processedData = sheetData.map(row => ({
-          ...row,
-          date: formatSafeDate(row.date)
-        }));
+        // Add logging to check incoming data
+        console.log('Raw sheet data:', sheetData.slice(0, 3));
+
+        const processedData = sheetData.map(row => {
+          // Ensure date is in DD/MM/YYYY format
+          let formattedDate = row.date;
+          if (typeof row.date === 'string') {
+            // Check if date is in MM/DD/YYYY format
+            const [first, second, year] = row.date.split('/').map(Number);
+            if (first <= 12) { // If first number could be a month
+              // Convert from MM/DD/YYYY to DD/MM/YYYY
+              formattedDate = `${second.toString().padStart(2, '0')}/${first.toString().padStart(2, '0')}/${year}`;
+            }
+          }
+
+          return {
+            ...row,
+            date: formattedDate
+          };
+        });
+
+        // Log processed data
+        console.log('Processed data:', processedData.slice(0, 3));
 
         // Process the data to combine Suited ACA with ACA ACA
         const combinedData = processOverviewData(processedData);
