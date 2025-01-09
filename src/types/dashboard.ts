@@ -1,5 +1,5 @@
 export interface TableData {
-    date: string | Date;
+    date: string;
     mediaBuyer: string;
     network: string;
     offer: string;

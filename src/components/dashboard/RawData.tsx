@@ -12,7 +12,7 @@ import { normalizeNetworkOffer } from '@/utils/dataUtils';
 
 type TimeRange = 'eod' | '7d' | 'mtd' | 'custom';
 
-const DEFAULT_DATE_STRING = '2025-01-07';
+const DEFAULT_DATE_STRING = '2025-01-08';
 
 const DateRangeSelector = ({ 
   timeRange, 
@@ -31,9 +31,9 @@ const DateRangeSelector = ({
       value={timeRange}
       onChange={(e) => setTimeRange(e.target.value as TimeRange)}
     >
-      <option value="eod">EOD Report</option>
-      <option value="7d">Last 7 Days</option>
-      <option value="mtd">Month to Date</option>
+      <option value="eod">EOD Report (Jan 8)</option>
+      <option value="7d">Last 7 Days (Jan 1-8)</option>
+      <option value="mtd">Month to Date (January)</option>
       <option value="custom">Custom Date</option>
     </select>
     
@@ -43,7 +43,7 @@ const DateRangeSelector = ({
         className="border rounded p-1"
         value={customDateString}
         min="2025-01-01"
-        max="2025-01-07"
+        max="2025-01-08"
         onChange={(e) => setCustomDateString(e.target.value)}
       />
     )}
@@ -196,17 +196,25 @@ export const RawData = ({
     // Filter by date range
     filtered = filtered.filter(row => {
       if (typeof row.date !== 'string') return false;
-      const [day, month, year] = row.date.split('/').map(Number);
+      
+      // Parse date assuming MM/DD/YYYY format
+      const [month, day, year] = row.date.split('/').map(Number);
+      const rowDate = new Date(year, month - 1, day);
       
       switch (timeRange) {
         case 'eod':
-          return day === 7 && month === 1 && year === 2025;
+          // Show January 8th data
+          return month === 1 && day === 8 && year === 2025;
         case '7d':
-          return month === 1 && year === 2025 && day <= 7;
+          // Show January 1st through 8th
+          return month === 1 && year === 2025 && day >= 1 && day <= 8;
         case 'mtd':
-          return month === 1 && year === 2025 && day <= 7;
+          // Show all of January
+          return month === 1 && year === 2025;
         case 'custom':
-          return row.date === customDateString.split('-').reverse().join('/');
+          // Convert custom date to match our format
+          const [customYear, customMonth, customDay] = customDateString.split('-').map(Number);
+          return month === customMonth && day === customDay && year === customYear;
         default:
           return true;
       }

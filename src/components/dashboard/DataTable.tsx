@@ -12,7 +12,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { TableData } from '@/types/dashboard';
-import { DateRange } from '@/hooks/useDashboardState';
+import { useDashboardState } from '@/hooks/useDashboardState';
+type DateRange = 'yesterday' | 'mtd' | '7d' | 'all';
 
 interface DataTableProps {
   data: TableData[];
@@ -130,11 +131,8 @@ const DataTable = ({
             <TableBody>
               {sortedData.map((row, idx) => (
                 <TableRow key={idx}>
-                  {/* Convert Date to string if needed */}
                   <TableCell>
-                    {row.date instanceof Date
-                      ? row.date.toLocaleDateString()
-                      : row.date}
+                    {row.date}
                   </TableCell>
                   {userRole === 'admin' && (
                     <TableCell>{row.mediaBuyer}</TableCell>

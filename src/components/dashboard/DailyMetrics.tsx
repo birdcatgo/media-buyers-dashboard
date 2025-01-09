@@ -18,14 +18,13 @@ export const DailyMetrics = ({
 
     // Find the latest date in the dataset
     const latestDate = filtered.reduce((latest, row) => {
-      if (typeof row.date !== 'string') return latest;
-      const [day, month, year] = row.date.split('/').map(Number);
+      const [month, day, year] = row.date.split('/').map(Number);
       const currentDate = new Date(year, month - 1, day);
       return currentDate > latest ? currentDate : latest;
     }, new Date(0));
 
-    // Format latest date as DD/MM/YYYY
-    const formattedLatestDate = `${latestDate.getDate().toString().padStart(2, '0')}/${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getFullYear()}`;
+    // Format latest date as MM/DD/YYYY
+    const formattedLatestDate = `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`;
 
     // Filter for only the latest date and apply other filters
     return filtered.filter(row => 

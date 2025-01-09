@@ -21,36 +21,41 @@ interface TrendData {
   avgDailyRoas: number;
   yesterdayRoas: number;
   trend: number;
+  date: string | Date;
 }
 
 const parseDateString = (dateStr: string) => {
-  const parts = dateStr.split('/').map(Number);
-  
-  // Input is in DD/MM/YYYY format
-  const [day, month, year] = parts;
-  const date = new Date(year, month - 1, day);
-  
-  // Add logging to verify date parsing
-  console.log('Parsing date:', {
-    input: dateStr,
-    parts: { day, month, year },
-    result: date.toISOString()
-  });
-  
-  return date;
+  // Input is already in MM/DD/YYYY format
+  const [month, day, year] = dateStr.split('/').map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+};
+
+// Update getYesterday to handle MM/DD/YYYY format
+const getLatestDate = (dates: string[]) => {
+  const validDates = dates
+    .map(dateStr => {
+      const [month, day, year] = dateStr.split('/').map(Number);
+      return new Date(Date.UTC(year, month - 1, day));
+    })
+    .filter(date => !isNaN(date.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime());
+
+  return validDates[0] || new Date(Date.UTC(2025, 0, 8));
 };
 
 // Add validation logging
 console.log('Date parsing validation:', {
-  normalDate: parseDateString('01/02/2025').toISOString(), // MM/DD/YYYY
-  flippedDate: parseDateString('30/12/2024').toISOString(), // DD/MM/YYYY
-  anotherDate: parseDateString('13/12/2024').toISOString()  // DD/MM/YYYY (>12)
+  normalDate: parseDateString('01/02/2025')?.toISOString() ?? 'invalid',
+  flippedDate: parseDateString('30/12/2024')?.toISOString() ?? 'invalid',
+  anotherDate: parseDateString('13/12/2024')?.toISOString() ?? 'invalid'
 });
 
 // Helper function to check if a date is within a range
-const isDateInRange = (testDate: Date, startDate: Date, endDate: Date) => {
+const isDateInRange = (testDate: Date | null, startDate: Date, endDate: Date) => {
+  if (!testDate) return false;
+  
   const normalize = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
   };
 
   const test = normalize(testDate);
@@ -64,17 +69,54 @@ const isDateInRange = (testDate: Date, startDate: Date, endDate: Date) => {
 const calculateMetrics = (rows: any[]) => {
   if (!rows || !rows.length) return { profit: 0, spend: 0, revenue: 0, roas: 0 };
   
-  // Sum up the metrics
   const metrics = rows.reduce((acc, row) => ({
     profit: acc.profit + (row.profit || 0),
     spend: acc.spend + (row.adSpend || 0),
     revenue: acc.revenue + (row.adRev || 0)
   }), { profit: 0, spend: 0, revenue: 0 });
 
-  // Calculate ROAS only if there's spend
   const roas = metrics.spend > 0 ? metrics.revenue / metrics.spend : 0;
-
   return { ...metrics, roas };
+};
+
+// Add this helper function at the top
+const areDatesEqual = (date1: Date | null, date2: Date | null) => {
+  if (!date1 || !date2) return false;
+  
+  const equal = date1.getUTCFullYear() === date2.getUTCFullYear() &&
+         date1.getUTCMonth() === date2.getUTCMonth() &&
+         date1.getUTCDate() === date2.getUTCDate();
+  
+  // Log comparison details for January 8th
+  if (date2.getUTCFullYear() === 2025 && 
+      date2.getUTCMonth() === 0 && 
+      date2.getUTCDate() === 8) {
+    console.log('Jan 8 comparison:', {
+      date1: {
+        iso: date1.toISOString(),
+        year: date1.getUTCFullYear(),
+        month: date1.getUTCMonth() + 1,
+        day: date1.getUTCDate()
+      },
+      date2: {
+        iso: date2.toISOString(),
+        year: date2.getUTCFullYear(),
+        month: date2.getUTCMonth() + 1,
+        day: date2.getUTCDate()
+      },
+      equal
+    });
+  }
+  
+  return equal;
+};
+
+const calculateTrend = (weekData: any[], yesterdayData: any[]) => {
+  const avgDailyProfit = calculateMetrics(weekData).profit / 7;
+  const yesterdayProfit = calculateMetrics(yesterdayData).profit;
+  return avgDailyProfit !== 0 
+    ? ((yesterdayProfit - avgDailyProfit) / Math.abs(avgDailyProfit)) * 100 
+    : 100;
 };
 
 export const OverviewDashboard = ({
@@ -82,113 +124,118 @@ export const OverviewDashboard = ({
 }: {
   data: DashboardData;
 }) => {
+  // Add date format verification logging
+  console.log('Date format check:', {
+    firstFewDates: data?.tableData?.slice(0, 5).map(row => ({
+      date: row.date,
+      isMMDDYYYY: typeof row.date === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(row.date),
+      parts: typeof row.date === 'string' ? row.date.split('/') : []
+    })),
+    uniqueDates: Array.from(new Set(data?.tableData?.map(row => row.date))).sort()
+  });
+
+  const getYesterday = (data: DashboardData) => {
+    // We know we want January 8th, 2025
+    const targetDate = new Date(Date.UTC(2025, 0, 8)); // January 8th, 2025
+
+    console.log('Target date:', {
+      date: targetDate.toISOString(),
+      month: targetDate.getUTCMonth() + 1, // Add 1 because months are 0-based
+      day: targetDate.getUTCDate(),
+      year: targetDate.getUTCFullYear()
+    });
+
+    return targetDate;
+  };
+
+  // Add debugging for incoming data with date focus
+  console.log('OverviewDashboard received data:', {
+    hasData: !!data?.tableData?.length,
+    count: data?.tableData?.length,
+    jan8Data: data?.tableData?.filter(row => row.date === '01/08/2025'),
+    sampleDates: data?.tableData?.slice(0, 10).map(row => row.date)
+  });
+
   const { buyerTrends, offerTrends } = useMemo(() => {
-    // Find the most recent date in the data
-    const dates = data.tableData
-      .map(row => typeof row.date === 'string' ? parseDateString(row.date) : null)
-      .filter((date): date is Date => date !== null)
-      .sort((a, b) => b.getTime() - a.getTime());
-
-    if (dates.length === 0) {
-      return { buyerTrends: [], offerTrends: [] };
-    }
-
-    // Set yesterday to January 7th, 2025
-    const yesterday = new Date(2025, 0, 7); // January is 0-based
-    const weekStart = new Date(2025, 0, 1); // Start of January 2025
-
-    console.log('Fixed date ranges:', {
-      yesterday: yesterday.toISOString(),
-      weekStart: weekStart.toISOString()
-    });
-
-    // Group data by network-offer-buyer combination
     const groups = new Map();
+    const targetDate = '01/08/2025';
+    const weekDates = [
+      '01/01/2025',
+      '01/02/2025',
+      '01/03/2025',
+      '01/04/2025',
+      '01/05/2025',
+      '01/06/2025',
+      '01/07/2025'
+    ];
 
+    // Process data
     data.tableData.forEach(row => {
-      if (typeof row.date !== 'string') return;
-      const date = parseDateString(row.date);
-      
-      // Normalize the network and offer for Suited ACA
-      const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
-      const offer = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.offer;
-      
-      // Create key with normalized values
-      const key = `${network}-${offer}-${row.mediaBuyer}`;
-      
-      const current = groups.get(key) || {
-        network,  // Use normalized network
-        offer,    // Use normalized offer
-        mediaBuyer: row.mediaBuyer,
-        weekData: [],
-        yesterdayData: []
-      };
+      const isTargetDate = row.date === targetDate;
+      const isInWeek = weekDates.includes(row.date);
 
-      // Debug logging for date comparisons
-      console.log('Row date check:', {
-        rowDate: date.toISOString(),
-        isYesterday: date.getTime() === yesterday.getTime(),
-        isInWeek: isDateInRange(date, weekStart, yesterday),
-        key,
-        originalNetwork: row.network,
-        normalizedNetwork: network,
-        originalOffer: row.offer,
-        normalizedOffer: offer
-      });
+      if (isTargetDate || isInWeek) {
+        const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
+        const offer = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.offer;
+        const key = `${network}-${offer}-${row.mediaBuyer}`;
 
-      if (date.getTime() === yesterday.getTime()) {
-        current.yesterdayData.push(row);
+        const current = groups.get(key) || {
+          network,
+          offer,
+          mediaBuyer: row.mediaBuyer,
+          weekData: [],
+          yesterdayData: []
+        };
+
+        if (isTargetDate) {
+          current.yesterdayData.push(row);
+        }
+        if (isInWeek) {
+          current.weekData.push(row);
+        }
+
+        groups.set(key, current);
       }
-      if (isDateInRange(date, weekStart, yesterday)) {
-        current.weekData.push(row);
-      }
-
-      groups.set(key, current);
     });
 
-    // Calculate trends
+    console.log('Group data:', {
+      totalGroups: groups.size,
+      groupKeys: Array.from(groups.keys()),
+      sampleGroup: Array.from(groups.values())[0],
+      weekDataSizes: Array.from(groups.values()).map(g => g.weekData.length),
+      yesterdayDataSizes: Array.from(groups.values()).map(g => g.yesterdayData.length)
+    });
+
     const allTrends = Array.from(groups.values())
-      .map(group => {
-        // Calculate weekly metrics (including yesterday)
-        const weeklyMetrics = calculateMetrics(group.weekData);
-        const daysInWeek = 7;
-        const avgDailyProfit = weeklyMetrics.profit / daysInWeek;
-        const avgDailyRoas = weeklyMetrics.roas;
-
-        // Calculate yesterday's metrics separately
-        const yesterdayMetrics = calculateMetrics(group.yesterdayData);
-        const yesterdayProfit = yesterdayMetrics.profit;
-        const yesterdayRoas = yesterdayMetrics.roas;
-
-        // Calculate trend percentage
-        const trend = avgDailyProfit !== 0 
-          ? ((yesterdayProfit - avgDailyProfit) / Math.abs(avgDailyProfit)) * 100 
-          : 100; // If no average, but we have yesterday's profit, that's a 100% increase
-
-        return {
-          network: group.network,
-          offer: group.offer,
-          mediaBuyer: group.mediaBuyer,
-          avgDailyProfit,
-          yesterdayProfit,
-          avgDailyRoas,
-          yesterdayRoas,
-          trend
-        };
-      })
-      .filter(trend => trend.avgDailyProfit > 0 || trend.yesterdayProfit > 0)
+      .map(group => ({
+        network: group.network,
+        offer: group.offer,
+        mediaBuyer: group.mediaBuyer,
+        avgDailyProfit: calculateMetrics(group.weekData).profit / 7,
+        yesterdayProfit: calculateMetrics(group.yesterdayData).profit,
+        avgDailyRoas: calculateMetrics(group.weekData).roas,
+        yesterdayRoas: calculateMetrics(group.yesterdayData).roas,
+        trend: calculateTrend(group.weekData, group.yesterdayData)
+      }))
       .sort((a, b) => b.yesterdayProfit - a.yesterdayProfit);
 
-    return {
-      buyerTrends: allTrends,
-      offerTrends: []  // We can remove this if not needed
-    };
+    return { buyerTrends: allTrends, offerTrends: [] };
   }, [data.tableData]);
+
+  // Add debugging for trends
+  console.log('Generated trends:', {
+    trendCount: buyerTrends.length,
+    sample: buyerTrends.slice(0, 3)
+  });
 
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Performance Overview</h2>
       
+      <div className="text-sm text-muted-foreground">
+        Showing {buyerTrends.length} trends
+      </div>
+
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">

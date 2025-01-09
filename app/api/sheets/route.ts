@@ -36,19 +36,8 @@ export async function GET() {
     const processedData = response.data.values
       .filter(row => row.length >= 9) // Ensure row has minimum required columns
       .map(row => {
-        // Ensure date is a string in dd/MM/yyyy format
-        let dateStr = row[1] || '';
-        if (dateStr) {
-          try {
-            // If the date is in a different format, parse and reformat it
-            const date = new Date(dateStr);
-            if (!isNaN(date.getTime())) {
-              dateStr = format(date, 'dd/MM/yyyy');
-            }
-          } catch (e) {
-            console.warn('Date parsing failed for:', dateStr);
-          }
-        }
+        // Just use the date string as is from the sheet
+        const dateStr = row[1] || '';
 
         // Clean number function
         const cleanNumber = (value: string): number => {
