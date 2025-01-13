@@ -5,7 +5,7 @@ import { DashboardData } from '@/types/dashboard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDollar } from '@/utils/formatters';
 
-type TimeRange = 'eod' | '7d' | 'mtd' | '90d';
+type TimeRange = 'yesterday' | '7d' | '14d' | 'mtd' | '30d' | '60d' | 'lastMonth' | 'ytd';
 
 // Add this type for our data points
 type DataPoint = {
@@ -62,56 +62,71 @@ const validateDates = (data: any[]) => {
   };
 };
 
-// Update getFilteredData with logging
+// Add getDateRange helper function
+const getDateRange = (timeRange: TimeRange, latestDate: Date): { start: Date, end: Date } => {
+  let end = latestDate;
+  let start: Date;
+
+  switch (timeRange) {
+    case 'yesterday':
+      start = new Date(latestDate);
+      start.setDate(latestDate.getDate() - 1);
+      return { start, end: start };
+    case '7d':
+      start = new Date(latestDate);
+      start.setDate(latestDate.getDate() - 6);
+      return { start, end };
+    case '14d':
+      start = new Date(latestDate);
+      start.setDate(latestDate.getDate() - 13);
+      return { start, end };
+    case 'mtd':
+      start = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
+      return { start, end };
+    case '30d':
+      start = new Date(latestDate);
+      start.setDate(latestDate.getDate() - 29);
+      return { start, end };
+    case '60d':
+      start = new Date(latestDate);
+      start.setDate(latestDate.getDate() - 59);
+      return { start, end };
+    case 'lastMonth':
+      start = new Date(latestDate.getFullYear(), latestDate.getMonth() - 1, 1);
+      end = new Date(latestDate.getFullYear(), latestDate.getMonth(), 0);
+      return { start, end };
+    case 'ytd':
+      start = new Date(latestDate.getFullYear(), 0, 1);
+      return { start, end };
+    default:
+      return { start: end, end };
+  }
+};
+
+// Update getFilteredData function
 const getFilteredData = (data: any[], timeRange: TimeRange) => {
-  const filtered = data.filter(row => {
+  const latestDate = getLatestDate(data);
+  
+  return data.filter(row => {
     if (typeof row.date !== 'string') return false;
     
     const [month, day, year] = row.date.split('/').map(Number);
-    
-    // Log any parsing issues
-    if (isNaN(month) || isNaN(day) || isNaN(year)) {
-      console.warn('Invalid date format:', row.date);
-      return false;
-    }
-
-    const result = (() => {
-      switch (timeRange) {
-        case 'eod':
-          return month === 1 && day === 8 && year === 2025;
-        case '7d':
-          return month === 1 && year === 2025 && day >= 1 && day <= 8;
-        case 'mtd':
-          return month === 1 && year === 2025;
-        case '90d':
-          return ((month === 12 && year === 2024) || 
-                  (month === 1 && year === 2025));
-        default:
-          return true;
-      }
-    })();
-
-    // Log filtered dates
-    if (result) {
-      console.log('Including date:', {
-        original: row.date,
-        parsed: { month, day, year },
-        timeRange
-      });
-    }
-
-    return result;
+    const rowDate = new Date(year, month - 1, day);
+    const { start, end } = getDateRange(timeRange, latestDate);
+    return rowDate >= start && rowDate <= end;
   });
+};
 
-  // Log filtering results
-  console.log('Filtered Results:', {
-    timeRange,
-    totalRows: data.length,
-    filteredRows: filtered.length,
-    uniqueDates: Array.from(new Set(filtered.map(row => row.date))).sort()
-  });
-
-  return filtered;
+// Add getLatestDate helper function
+const getLatestDate = (data: any[]): Date => {
+  const dates = data
+    .map(row => {
+      const [month, day, year] = row.date.split('/').map(Number);
+      return new Date(year, month - 1, day);
+    })
+    .filter(date => !isNaN(date.getTime()));
+  
+  return new Date(Math.max(...dates.map(d => d.getTime())));
 };
 
 export const OfferDashboard = ({
@@ -217,10 +232,14 @@ export const OfferDashboard = ({
             <SelectValue placeholder="Select time range" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="eod">Yesterday</SelectItem>
+            <SelectItem value="yesterday">Yesterday</SelectItem>
             <SelectItem value="7d">Last 7 Days</SelectItem>
+            <SelectItem value="14d">Last 14 Days</SelectItem>
             <SelectItem value="mtd">Month to Date</SelectItem>
-            <SelectItem value="90d">Last 90 Days</SelectItem>
+            <SelectItem value="30d">Last 30 Days</SelectItem>
+            <SelectItem value="60d">Last 60 Days</SelectItem>
+            <SelectItem value="lastMonth">Last Month</SelectItem>
+            <SelectItem value="ytd">Year to Date</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -10,7 +10,7 @@ import { DashboardData } from '@/types/dashboard';
 import { formatDollar } from '@/utils/formatters';
 import { normalizeNetworkOffer } from '@/utils/dataUtils';
 
-type TimeRange = 'eod' | '7d' | 'mtd' | 'custom';
+type TimeRange = 'yesterday' | '7d' | '14d' | 'mtd' | '30d' | '60d' | 'lastMonth' | 'ytd' | 'custom';
 
 const DEFAULT_DATE_STRING = '2025-01-08';
 
@@ -26,7 +26,10 @@ const getLatestDate = (data: any[]): Date => {
 };
 
 const formatYYYYMMDD = (date: Date): string => {
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const DateRangeSelector = ({ 
@@ -48,9 +51,14 @@ const DateRangeSelector = ({
       value={timeRange}
       onChange={(e) => setTimeRange(e.target.value as TimeRange)}
     >
-      <option value="eod">EOD Report (Latest)</option>
+      <option value="yesterday">Yesterday</option>
       <option value="7d">Last 7 Days</option>
+      <option value="14d">Last 14 Days</option>
       <option value="mtd">Month to Date</option>
+      <option value="30d">Last 30 Days</option>
+      <option value="60d">Last 60 Days</option>
+      <option value="lastMonth">Last Month</option>
+      <option value="ytd">Year to Date</option>
       <option value="custom">Custom Date</option>
     </select>
     
@@ -155,7 +163,7 @@ export const RawData = ({
   network = 'all'
 }: Props) => {
   const latestDate = useMemo(() => getLatestDate(data.tableData), [data.tableData]);
-  const [timeRange, setTimeRange] = useState<TimeRange>('eod');
+  const [timeRange, setTimeRange] = useState<TimeRange>('yesterday');
   const [customDateString, setCustomDateString] = useState(formatYYYYMMDD(latestDate));
   const [sortConfig, setSortConfig] = useState<{
     key: string;
@@ -175,36 +183,61 @@ export const RawData = ({
     }));
   }, [buyer]);
 
-  const getFilteredData = (data: any[], timeRange: TimeRange) => {
-    return data.filter(row => {
-      if (typeof row.date !== 'string') return false;
-      
-      switch (timeRange) {
-        case 'eod':
-          return row.date === '07/01/2025';
-        case '7d': {
-          const [mm, dd, yyyy] = row.date.split('/').map(Number);
-          const rowDate = new Date(yyyy, mm - 1, dd);
-          const endDate = new Date('2025-01-07');
-          const startDate = new Date(endDate);
-          startDate.setDate(startDate.getDate() - 7);
-          return rowDate >= startDate && rowDate <= endDate;
-        }
-        case 'mtd': {
-          const [mm, dd, yyyy] = row.date.split('/').map(Number);
-          const rowDate = new Date(yyyy, mm - 1, dd);
-          const endDate = new Date('2025-01-07');
-          const startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-          return rowDate >= startDate && rowDate <= endDate;
-        }
-        default:
-          return true;
-      }
-    });
+  const getDateRange = (timeRange: TimeRange, latestDate: Date, customDateString?: string): { start: Date, end: Date } => {
+    let end = latestDate;
+    let start: Date;
+
+    switch (timeRange) {
+      case 'yesterday':
+        start = new Date(latestDate);
+        start.setDate(latestDate.getDate() - 1);
+        return { start, end: start };
+      case '7d':
+        start = new Date(latestDate);
+        start.setDate(latestDate.getDate() - 6);
+        return { start, end };
+      case '14d':
+        start = new Date(latestDate);
+        start.setDate(latestDate.getDate() - 13);
+        return { start, end };
+      case 'mtd':
+        start = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
+        return { start, end };
+      case '30d':
+        start = new Date(latestDate);
+        start.setDate(latestDate.getDate() - 29);
+        return { start, end };
+      case '60d':
+        start = new Date(latestDate);
+        start.setDate(latestDate.getDate() - 59);
+        return { start, end };
+      case 'lastMonth':
+        start = new Date(latestDate.getFullYear(), latestDate.getMonth() - 1, 1);
+        end = new Date(latestDate.getFullYear(), latestDate.getMonth(), 0);
+        return { start, end };
+      case 'ytd':
+        start = new Date(latestDate.getFullYear(), 0, 1);
+        return { start, end };
+      case 'custom':
+        if (!customDateString) return { start: end, end };
+        const [year, month, day] = customDateString.split('-').map(Number);
+        start = new Date(year, month - 1, day);
+        return { start, end: start };
+      default:
+        return { start: end, end };
+    }
   };
 
   const filteredData = useMemo(() => {
-    let filtered = [...data.tableData].map(normalizeNetworkOffer);
+    let filtered = [...data.tableData];
+    
+    filtered = filtered.filter(row => {
+      if (typeof row.date !== 'string') return false;
+      const [month, day, year] = row.date.split('/').map(Number);
+      const rowDate = new Date(year, month - 1, day);
+      const { start, end } = getDateRange(timeRange, latestDate, customDateString);
+      return rowDate >= start && rowDate <= end;
+    });
 
     if (buyer !== 'all') {
       filtered = filtered.filter(row => row.mediaBuyer === buyer);
@@ -217,7 +250,7 @@ export const RawData = ({
       const rowDate = new Date(year, month - 1, day);
       
       switch (timeRange) {
-        case 'eod':
+        case 'yesterday':
           // Show latest date's data
           return rowDate.getTime() === latestDate.getTime();
         case '7d': {
@@ -352,7 +385,7 @@ export const RawData = ({
               {sortedData.map((row, idx) => (
                 <TableRow key={idx}>
                   <TableCell>
-                    {typeof row.date === 'string' ? row.date : row.date.toLocaleDateString()}
+                    {row.date}
                   </TableCell>
                   <TableCell>{row.mediaBuyer}</TableCell>
                   <TableCell>{row.adAccount}</TableCell>
