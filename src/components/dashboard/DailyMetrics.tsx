@@ -50,6 +50,11 @@ export const DailyMetrics = ({
     return isToday ? "Today" : isYesterday ? "Yesterday" : "Latest Day";
   }, [latestDate]);
 
+  // Format the date separately for the title
+  const formattedDate = useMemo(() => {
+    return `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`;
+  }, [latestDate]);
+
   // Calculate metrics for the latest day only
   const metrics = useMemo(() => {
     return filteredData.reduce(
@@ -176,7 +181,7 @@ export const DailyMetrics = ({
       {/* Media Buyer Summary Table */}
       <Card>
         <CardHeader>
-          <CardTitle>{dateDisplay}'s Media Buyer Summary</CardTitle>
+          <CardTitle>{dateDisplay}'s Media Buyer Summary - {formattedDate}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -211,7 +216,7 @@ export const DailyMetrics = ({
       {/* Network Offer Summary Table */}
       <Card>
         <CardHeader>
-          <CardTitle>{dateDisplay}'s Network Offer Summary</CardTitle>
+          <CardTitle>{dateDisplay}'s Network Offer Summary - {formattedDate}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

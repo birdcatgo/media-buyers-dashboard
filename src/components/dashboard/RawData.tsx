@@ -44,36 +44,43 @@ const DateRangeSelector = ({
   customDateString: string;
   setCustomDateString: (date: string) => void;
   latestDate: Date;
-}) => (
-  <div className="flex items-center gap-4">
-    <select 
-      className="border rounded p-1"
-      value={timeRange}
-      onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-    >
-      <option value="yesterday">Yesterday</option>
-      <option value="7d">Last 7 Days</option>
-      <option value="14d">Last 14 Days</option>
-      <option value="mtd">Month to Date</option>
-      <option value="30d">Last 30 Days</option>
-      <option value="60d">Last 60 Days</option>
-      <option value="lastMonth">Last Month</option>
-      <option value="ytd">Year to Date</option>
-      <option value="custom">Custom Date</option>
-    </select>
-    
-    {timeRange === 'custom' && (
-      <input
-        type="date"
+}) => {
+  // Format yesterday's date
+  const yesterday = new Date(latestDate);
+  yesterday.setDate(latestDate.getDate() - 1);
+  const yesterdayFormatted = `${(yesterday.getMonth() + 1).toString().padStart(2, '0')}/${yesterday.getDate().toString().padStart(2, '0')}/${yesterday.getFullYear()}`;
+
+  return (
+    <div className="flex items-center gap-4">
+      <select 
         className="border rounded p-1"
-        value={customDateString}
-        min={formatYYYYMMDD(new Date(latestDate.getFullYear(), latestDate.getMonth(), 1))}
-        max={formatYYYYMMDD(latestDate)}
-        onChange={(e) => setCustomDateString(e.target.value)}
-      />
-    )}
-  </div>
-);
+        value={timeRange}
+        onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+      >
+        <option value="yesterday">Yesterday ({yesterdayFormatted})</option>
+        <option value="7d">Last 7 Days</option>
+        <option value="14d">Last 14 Days</option>
+        <option value="mtd">Month to Date</option>
+        <option value="30d">Last 30 Days</option>
+        <option value="60d">Last 60 Days</option>
+        <option value="lastMonth">Last Month</option>
+        <option value="ytd">Year to Date</option>
+        <option value="custom">Custom Date</option>
+      </select>
+      
+      {timeRange === 'custom' && (
+        <input
+          type="date"
+          className="border rounded p-1"
+          value={customDateString}
+          min={formatYYYYMMDD(new Date(latestDate.getFullYear(), latestDate.getMonth(), 1))}
+          max={formatYYYYMMDD(latestDate)}
+          onChange={(e) => setCustomDateString(e.target.value)}
+        />
+      )}
+    </div>
+  );
+};
 
 const FilterControls = ({
   data,
