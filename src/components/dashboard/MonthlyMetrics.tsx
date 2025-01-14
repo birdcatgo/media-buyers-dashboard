@@ -1,6 +1,6 @@
 // src/components/dashboard/MonthlyMetrics.tsx
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   LineChart,
@@ -12,11 +12,13 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer
+  ResponsiveContainer,
+  Legend
 } from 'recharts';
 import { DollarSign, TrendingUp, PieChart } from 'lucide-react';
 import { DashboardData } from '@/types/dashboard';
 import { formatDollar } from '@/utils/formatters';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const getStatusEmoji = (profit: number) => {
   if (profit > 3000) return '🟢';
@@ -60,47 +62,158 @@ const MetricCard = ({
   </Card>
 );
 
-const TrendChart = ({ data, title }: { data: any[]; title: string }) => (
-  <Card>
-    <CardHeader>
-      <CardTitle>{title}</CardTitle>
-    </CardHeader>
-    <CardContent>
-      <div className="h-[400px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart 
-            data={data}
-            margin={{ top: 20, right: 30, left: 60, bottom: 60 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis 
-              dataKey="date"
-              interval={0}
-              angle={-45}
-              textAnchor="end"
-              height={60}
-              tick={{ fontSize: 12 }}
-            />
-            <YAxis 
-              tickFormatter={(value) => `$${value.toLocaleString()}`}
-              width={80}
-            />
-            <Tooltip
-              formatter={(value: number) => [`$${value.toLocaleString()}`, 'Profit']}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="profit" 
-              stroke="#2563eb" 
-              strokeWidth={2}
-              dot
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </CardContent>
-  </Card>
-);
+type MetricType = 'profit' | 'roi';
+
+const TrendChart = ({ data, title }: { data: any[]; title: string }) => {
+  const [selectedOffers, setSelectedOffers] = useState<string[]>([]);
+  const [metricType, setMetricType] = useState<MetricType>('profit');
+
+  // Get unique offers from data
+  const uniqueOffers = useMemo(() => {
+    const offers = new Set<string>();
+    data.forEach(day => {
+      Object.keys(day).forEach(key => {
+        if (key !== 'date') offers.add(key);
+      });
+    });
+    return Array.from(offers).sort();
+  }, [data]);
+
+  // Calculate chart data with cumulative totals as default
+  const chartData = useMemo(() => {
+    return data.map(day => {
+      const dayData: any = { date: day.date };
+      
+      if (selectedOffers.length === 0) {
+        // Calculate daily totals for all offers
+        let totalProfit = 0;
+        let totalSpend = 0;
+        
+        uniqueOffers.forEach(offer => {
+          if (day[offer]) {
+            totalProfit += day[offer].profit || 0;
+            totalSpend += day[offer].spend || 0;
+          }
+        });
+
+        dayData.Total = metricType === 'profit' 
+          ? totalProfit 
+          : (totalSpend > 0 ? (totalProfit / totalSpend) * 100 : 0);
+      } else {
+        // Show selected individual offers
+        selectedOffers.forEach(offer => {
+          if (metricType === 'profit') {
+            dayData[offer] = day[offer]?.profit || 0;
+          } else {
+            const spend = day[offer]?.spend || 0;
+            const profit = day[offer]?.profit || 0;
+            dayData[offer] = spend > 0 ? (profit / spend) * 100 : 0;
+          }
+        });
+      }
+      
+      return dayData;
+    });
+  }, [data, selectedOffers, metricType, uniqueOffers]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex justify-between items-center">
+          <CardTitle>{title}</CardTitle>
+          <div className="flex gap-4">
+            <Select
+              value={metricType}
+              onValueChange={(value: MetricType) => setMetricType(value)}
+            >
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="Select metric" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="profit">Profit</SelectItem>
+                <SelectItem value="roi">ROI</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={selectedOffers.join(',') || 'all'}
+              onValueChange={(value) => setSelectedOffers(value === 'all' ? [] : value.split(','))}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select offers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Daily Total</SelectItem>
+                {uniqueOffers.map(offer => (
+                  <SelectItem key={offer} value={offer}>
+                    {offer}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart 
+              data={chartData}
+              margin={{ top: 20, right: 30, left: 60, bottom: 60 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="date"
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+                tick={{ fontSize: 12 }}
+              />
+              <YAxis 
+                tickFormatter={(value) => 
+                  metricType === 'profit' 
+                    ? `$${value.toLocaleString()}`
+                    : `${value.toFixed(1)}%`
+                }
+                width={80}
+              />
+              <Tooltip
+                formatter={(value: number, name: string) => [
+                  metricType === 'profit'
+                    ? `$${value.toLocaleString()}`
+                    : `${value.toFixed(1)}%`,
+                  name
+                ]}
+              />
+              <Legend />
+              {selectedOffers.length === 0 ? (
+                <Line 
+                  type="monotone" 
+                  dataKey="Total"
+                  name="Daily Total"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  dot
+                />
+              ) : (
+                selectedOffers.map((offer, index) => (
+                  <Line 
+                    key={offer}
+                    type="monotone" 
+                    dataKey={offer}
+                    stroke={`hsl(${(index * 360) / selectedOffers.length}, 70%, 50%)`}
+                    strokeWidth={2}
+                    dot
+                  />
+                ))
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 export const MonthlyMetrics = ({
   buyer,
@@ -189,32 +302,35 @@ export const MonthlyMetrics = ({
 
   // Build dailyTrendData with proper aggregation
   const dailyTrendData = useMemo(() => {
-    // Create a map to aggregate data by date
+    // Create a map to aggregate data by date and offer
     const dailyTotals = new Map<string, {
       date: string;
-      profit: number;
-      spend: number;
-      revenue: number;
-      count: number;
+      [key: string]: any; // For offer-specific data
     }>();
 
     // Process each row
     filteredData.forEach(row => {
       const date = row.date;
-      const current = dailyTotals.get(date) || {
-        date,
-        profit: 0,
-        spend: 0,
-        revenue: 0,
-        count: 0
-      };
+      const offerKey = (row.network === 'Suited' && row.offer === 'ACA') 
+        ? 'ACA - ACA' 
+        : `${row.network} - ${row.offer}`;
 
-      current.profit += row.profit;
-      current.spend += row.adSpend;
-      current.revenue += row.adRev;
-      current.count += 1;
+      if (!dailyTotals.has(date)) {
+        dailyTotals.set(date, { date });
+      }
+      
+      const dayData = dailyTotals.get(date)!;
+      if (!dayData[offerKey]) {
+        dayData[offerKey] = {
+          profit: 0,
+          spend: 0,
+          revenue: 0
+        };
+      }
 
-      dailyTotals.set(date, current);
+      dayData[offerKey].profit += row.profit;
+      dayData[offerKey].spend += row.adSpend;
+      dayData[offerKey].revenue += row.adRev;
     });
 
     // Convert to array and sort by date
@@ -226,14 +342,11 @@ export const MonthlyMetrics = ({
                new Date(bYear, bMonth - 1, bDay).getTime();
       });
 
-    console.log('Daily Trend Data:', {
-      dates: sortedData.map(d => d.date),
-      totals: sortedData.map(d => ({
-        date: d.date,
-        profit: d.profit,
-        rowCount: d.count
-      }))
-    });
+      console.log('Daily Trend Data:', {
+        dates: sortedData.map(d => d.date),
+        sampleDay: sortedData[0],
+        offers: Object.keys(sortedData[0] || {}).filter(key => key !== 'date')
+      });
 
     return sortedData;
   }, [filteredData]);
@@ -336,6 +449,7 @@ const SummaryTable = ({ data, title }: { data: any[]; title: string }) => (
               <th className="text-right p-2">MTD Spend</th>
               <th className="text-right p-2">MTD Revenue</th>
               <th className="text-right p-2">MTD Profit</th>
+              <th className="text-right p-2">ROI</th>
               <th className="text-center p-2">Status</th>
             </tr>
           </thead>
@@ -346,6 +460,9 @@ const SummaryTable = ({ data, title }: { data: any[]; title: string }) => (
                 <td className="text-right p-2">{formatDollar(row.spend)}</td>
                 <td className="text-right p-2">{formatDollar(row.revenue)}</td>
                 <td className="text-right p-2">{formatDollar(row.profit)}</td>
+                <td className="text-right p-2">
+                  {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
+                </td>
                 <td className="text-center p-2">{getStatusEmoji(row.profit)}</td>
               </tr>
             ))}

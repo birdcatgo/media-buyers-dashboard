@@ -17,12 +17,19 @@ const DEFAULT_DATE_STRING = '2025-01-08';
 const getLatestDate = (data: any[]): Date => {
   const dates = data
     .map(row => {
+      if (!row.date) return null;
       const [month, day, year] = row.date.split('/').map(Number);
-      return new Date(year, month - 1, day);
+      const date = new Date(year, month - 1, day);
+      return isNaN(date.getTime()) ? null : date;
     })
-    .filter(date => !isNaN(date.getTime()));
+    .filter((date): date is Date => date !== null);
   
-  return new Date(Math.max(...dates.map(d => d.getTime())));
+  const latestDate = new Date(Math.max(...dates.map(d => d.getTime())));
+  console.log('Latest date:', {
+    raw: latestDate,
+    formatted: `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`
+  });
+  return latestDate;
 };
 
 const formatYYYYMMDD = (date: Date): string => {
@@ -45,10 +52,8 @@ const DateRangeSelector = ({
   setCustomDateString: (date: string) => void;
   latestDate: Date;
 }) => {
-  // Format yesterday's date
-  const yesterday = new Date(latestDate);
-  yesterday.setDate(latestDate.getDate() - 1);
-  const yesterdayFormatted = `${(yesterday.getMonth() + 1).toString().padStart(2, '0')}/${yesterday.getDate().toString().padStart(2, '0')}/${yesterday.getFullYear()}`;
+  // Format latest date
+  const formattedLatestDate = `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`;
 
   return (
     <div className="flex items-center gap-4">
@@ -57,7 +62,7 @@ const DateRangeSelector = ({
         value={timeRange}
         onChange={(e) => setTimeRange(e.target.value as TimeRange)}
       >
-        <option value="yesterday">Yesterday ({yesterdayFormatted})</option>
+        <option value="yesterday">Latest Date ({formattedLatestDate})</option>
         <option value="7d">Last 7 Days</option>
         <option value="14d">Last 14 Days</option>
         <option value="mtd">Month to Date</option>
@@ -238,18 +243,9 @@ export const RawData = ({
   const filteredData = useMemo(() => {
     let filtered = [...data.tableData];
     
-    filtered = filtered.filter(row => {
-      if (typeof row.date !== 'string') return false;
-      const [month, day, year] = row.date.split('/').map(Number);
-      const rowDate = new Date(year, month - 1, day);
-      const { start, end } = getDateRange(timeRange, latestDate, customDateString);
-      return rowDate >= start && rowDate <= end;
-    });
-
-    if (buyer !== 'all') {
-      filtered = filtered.filter(row => row.mediaBuyer === buyer);
-    }
-
+    // Format latest date as MM/DD/YYYY for comparison
+    const formattedLatestDate = `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`;
+    
     filtered = filtered.filter(row => {
       if (typeof row.date !== 'string') return false;
       
@@ -257,9 +253,9 @@ export const RawData = ({
       const rowDate = new Date(year, month - 1, day);
       
       switch (timeRange) {
-        case 'yesterday':
-          // Show latest date's data
-          return rowDate.getTime() === latestDate.getTime();
+        case 'yesterday': {
+          return row.date === formattedLatestDate;
+        }
         case '7d': {
           // Show last 7 days from latest date
           const sevenDaysAgo = new Date(latestDate);
@@ -281,6 +277,10 @@ export const RawData = ({
       }
     });
 
+    // Apply other filters
+    if (buyer !== 'all') {
+      filtered = filtered.filter(row => row.mediaBuyer === buyer);
+    }
     if (offer !== 'all') filtered = filtered.filter(row => row.offer === offer);
     if (network !== 'all') filtered = filtered.filter(row => row.network === network);
 

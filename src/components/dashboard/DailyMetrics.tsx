@@ -192,6 +192,7 @@ export const DailyMetrics = ({
                   <th className="text-right p-2">Spend</th>
                   <th className="text-right p-2">Revenue</th>
                   <th className="text-right p-2">Profit</th>
+                  <th className="text-right p-2">ROI</th>
                   <th className="text-center p-2">Status</th>
                 </tr>
               </thead>
@@ -202,6 +203,9 @@ export const DailyMetrics = ({
                     <td className="text-right p-2">${row.spend.toLocaleString()}</td>
                     <td className="text-right p-2">${row.revenue.toLocaleString()}</td>
                     <td className="text-right p-2">${row.profit.toLocaleString()}</td>
+                    <td className="text-right p-2">
+                      {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
+                    </td>
                     <td className="text-center p-2">
                       {row.profit > 3000 ? '🟢' : row.profit > 1000 ? '🟡' : row.profit > 0 ? '🟠' : '🔴'}
                     </td>
@@ -228,6 +232,7 @@ export const DailyMetrics = ({
                   <th className="text-right p-2">Spend</th>
                   <th className="text-right p-2">Revenue</th>
                   <th className="text-right p-2">Profit</th>
+                  <th className="text-right p-2">ROI</th>
                   <th className="text-center p-2">Status</th>
                 </tr>
               </thead>
@@ -239,6 +244,9 @@ export const DailyMetrics = ({
                     <td className="text-right p-2">${row.spend.toLocaleString()}</td>
                     <td className="text-right p-2">${row.revenue.toLocaleString()}</td>
                     <td className="text-right p-2">${row.profit.toLocaleString()}</td>
+                    <td className="text-right p-2">
+                      {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
+                    </td>
                     <td className="text-center p-2">
                       {row.profit > 3000 ? '🟢' : row.profit > 1000 ? '🟡' : row.profit > 0 ? '🟠' : '🔴'}
                     </td>

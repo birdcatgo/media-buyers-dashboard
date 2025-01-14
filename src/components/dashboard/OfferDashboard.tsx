@@ -258,6 +258,7 @@ export const OfferDashboard = ({
                   <th className="text-right p-2">Spend</th>
                   <th className="text-right p-2">Revenue</th>
                   <th className="text-right p-2">Profit</th>
+                  <th className="text-right p-2">ROI</th>
                   <th className="text-center p-2">Status</th>
                 </tr>
               </thead>
@@ -268,6 +269,9 @@ export const OfferDashboard = ({
                     <td className="text-right p-2">{formatDollar(spend)}</td>
                     <td className="text-right p-2">{formatDollar(revenue)}</td>
                     <td className="text-right p-2">{formatDollar(profit)}</td>
+                    <td className="text-right p-2">
+                      {spend > 0 ? `${((profit / spend) * 100).toFixed(1)}%` : 'N/A'}
+                    </td>
                     <td className="text-center p-2">
                       {profit > 3000 ? '🟢' : profit > 1000 ? '🟡' : profit > 0 ? '🟠' : '🔴'}
                     </td>
