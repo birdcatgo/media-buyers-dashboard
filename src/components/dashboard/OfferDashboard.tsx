@@ -129,12 +129,17 @@ const getLatestDate = (data: any[]): Date => {
   return new Date(Math.max(...dates.map(d => d.getTime())));
 };
 
+// Add type for metric
+type MetricType = 'profit' | 'roi';
+
 export const OfferDashboard = ({
   data
 }: {
   data: DashboardData;
 }) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('mtd');
+  const [selectedOffers, setSelectedOffers] = useState<string[]>([]);
+  const [metricType, setMetricType] = useState<MetricType>('profit');
 
   // Add date validation logging
   console.log('Date Validation:', validateDates(data.tableData));
@@ -153,17 +158,10 @@ export const OfferDashboard = ({
     return Array.from(combinations).sort();
   }, [data.tableData]);
 
-  // Add this new useMemo for the combined data
+  // Update combinedData to handle both profit and ROI
   const combinedData = useMemo(() => {
     const filteredTableData = getFilteredData(data.tableData, timeRange);
-    const dailyTotals = new Map<string, Record<string, number>>();
-    
-    // Debug log
-    console.log('Filtered data:', {
-      total: filteredTableData.length,
-      uniqueDates: Array.from(new Set(filteredTableData.map(row => row.date))).sort(),
-      sampleRow: filteredTableData[0]
-    });
+    const dailyTotals = new Map<string, Record<string, { profit: number; spend: number }>>();
     
     filteredTableData.forEach(row => {
       let key = `${row.network} - ${row.offer}`;
@@ -176,16 +174,39 @@ export const OfferDashboard = ({
       }
       const dayData = dailyTotals.get(row.date)!;
       if (!dayData[key]) {
-        dayData[key] = 0;
+        dayData[key] = { profit: 0, spend: 0 };
       }
-      dayData[key] += row.profit;
+      dayData[key].profit += row.profit;
+      dayData[key].spend += row.adSpend;
     });
 
     return Array.from(dailyTotals.entries())
-      .map(([date, profits]) => ({
-        date,
-        ...profits
-      }))
+      .map(([date, data]) => {
+        const dayData: any = { date };
+        
+        if (selectedOffers.length === 0) {
+          // Calculate daily totals
+          let totalProfit = 0;
+          let totalSpend = 0;
+          Object.values(data).forEach(({ profit, spend }) => {
+            totalProfit += profit;
+            totalSpend += spend;
+          });
+          dayData.Total = metricType === 'profit' 
+            ? totalProfit 
+            : (totalSpend > 0 ? (totalProfit / totalSpend) * 100 : 0);
+        } else {
+          // Show selected offers
+          selectedOffers.forEach(offer => {
+            if (data[offer]) {
+              dayData[offer] = metricType === 'profit'
+                ? data[offer].profit
+                : (data[offer].spend > 0 ? (data[offer].profit / data[offer].spend) * 100 : 0);
+            }
+          });
+        }
+        return dayData;
+      })
       .sort((a, b) => {
         const [aMonth, aDay, aYear] = a.date.split('/').map(Number);
         const [bMonth, bDay, bYear] = b.date.split('/').map(Number);
@@ -193,7 +214,7 @@ export const OfferDashboard = ({
         const dateB = new Date(bYear, bMonth - 1, bDay);
         return dateA.getTime() - dateB.getTime();
       });
-  }, [data.tableData, timeRange]);
+  }, [data.tableData, timeRange, selectedOffers, metricType]);
 
   // Add this at the top of the component, after the useMemos
   const sortedOfferPerformance = useMemo(() => {
@@ -283,61 +304,115 @@ export const OfferDashboard = ({
 
           {/* Chart Title */}
           <h3 className="text-lg font-semibold mb-6 text-center">
-            Daily Profit by Offer
+            Daily {metricType === 'profit' ? 'Profit' : 'ROI'} by Offer
           </h3>
 
-          {/* Enhanced Main Chart */}
-          <div className="h-[500px] flex">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart 
-                data={combinedData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
-                  tick={{ fontSize: 12 }}
-                  interval={0}
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                />
-                <YAxis 
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
-                  width={80}
-                />
-                <Tooltip 
-                  formatter={(value: number, name: string) => [
-                    `$${value.toLocaleString()}`, 
-                    name
-                  ]}
-                  labelFormatter={(label) => `Date: ${label}`}
-                  wrapperStyle={{ fontSize: '12px' }}
-                />
-                <Legend 
-                  verticalAlign="bottom"
-                  height={48}
-                  wrapperStyle={{ 
-                    fontSize: '12px',
-                    paddingTop: '20px'
-                  }}
-                />
-                <ReferenceLine y={0} stroke="#666" />
-                {networkOffers.map((offer, index) => (
-                  <Line
-                    key={offer}
-                    type="monotone"
-                    dataKey={offer}
-                    name={offer}
-                    stroke={`hsl(${(index * 360) / networkOffers.length}, 70%, 50%)`}
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          {/* Chart Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Daily {metricType === 'profit' ? 'Profit' : 'ROI'} by Offer</CardTitle>
+                <div className="flex gap-4">
+                  <Select
+                    value={metricType}
+                    onValueChange={(value: MetricType) => setMetricType(value)}
+                  >
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue placeholder="Select metric" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="profit">Profit</SelectItem>
+                      <SelectItem value="roi">ROI</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={selectedOffers.join(',') || 'all'}
+                    onValueChange={(value) => setSelectedOffers(value === 'all' ? [] : value.split(','))}
+                  >
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Select offers" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Daily Total</SelectItem>
+                      {networkOffers.map(offer => (
+                        <SelectItem key={offer} value={offer}>
+                          {offer}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[500px] flex">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart 
+                    data={combinedData}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 12 }}
+                      interval={0}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis 
+                      tickFormatter={(value) => 
+                        metricType === 'profit'
+                          ? `$${(value / 1000).toFixed(1)}k`
+                          : `${value.toFixed(1)}%`
+                      }
+                      width={80}
+                    />
+                    <Tooltip 
+                      formatter={(value: number, name: string) => [
+                        metricType === 'profit'
+                          ? `$${value.toLocaleString()}`
+                          : `${value.toFixed(1)}%`,
+                        name
+                      ]}
+                      labelFormatter={(label) => `Date: ${label}`}
+                      wrapperStyle={{ fontSize: '12px' }}
+                    />
+                    <Legend 
+                      verticalAlign="bottom"
+                      height={48}
+                      wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }}
+                    />
+                    <ReferenceLine y={0} stroke="#666" />
+                    {selectedOffers.length === 0 ? (
+                      <Line
+                        type="monotone"
+                        dataKey="Total"
+                        name="Daily Total"
+                        stroke="#2563eb"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    ) : (
+                      selectedOffers.map((offer, index) => (
+                        <Line
+                          key={offer}
+                          type="monotone"
+                          dataKey={offer}
+                          name={offer}
+                          stroke={`hsl(${(index * 360) / selectedOffers.length}, 70%, 50%)`}
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      ))
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
         </CardContent>
       </Card>
     </div>
