@@ -73,50 +73,47 @@ const SummaryTable = ({ data, title, timeRange }: {
   timeRange: TimeRange;
 }) => (
   <Card>
-    <CardHeader>
-      <CardTitle>{title}</CardTitle>
+    <CardHeader className="pb-2 pt-4">
+      <CardTitle className="text-base">{title}</CardTitle>
     </CardHeader>
-    <CardContent>
+    <CardContent className="pt-0">
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b">
-              <th className="text-left p-2">Name</th>
-              <th className="text-right p-2">{getTimeRangeLabel(timeRange)} Spend</th>
-              <th className="text-right p-2">{getTimeRangeLabel(timeRange)} Revenue</th>
-              <th className="text-right p-2">{getTimeRangeLabel(timeRange)} Profit</th>
-              <th className="text-right p-2">ROI</th>
-              <th className="text-center p-2">Status</th>
+              <th className="text-left py-1.5 px-2 whitespace-nowrap">Name</th>
+              <th className="text-right py-1.5 px-2 whitespace-nowrap">Spend</th>
+              <th className="text-right py-1.5 px-2 whitespace-nowrap">Revenue</th>
+              <th className="text-right py-1.5 px-2 whitespace-nowrap">Profit</th>
+              <th className="text-right py-1.5 px-2 whitespace-nowrap">ROI</th>
+              <th className="text-center py-1.5 px-2 whitespace-nowrap">Status</th>
+              <th className="text-center py-1.5 px-2 whitespace-nowrap">Trend</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="text-sm">
             {data.map((row, idx) => {
               const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
               const status = getROIStatus(roi, row.spend);
               
-              const trend = row.previousPeriodProfit 
-                ? ((row.profit - row.previousPeriodProfit) / Math.abs(row.previousPeriodProfit)) * 100
-                : 0;
-
               return (
                 <tr key={idx} className="border-b">
-                  <td className="p-2">{row.name}</td>
-                  <td className="text-right p-2">{formatDollar(row.spend)}</td>
-                  <td className="text-right p-2">{formatDollar(row.revenue)}</td>
-                  <td className="text-right p-2">{formatDollar(row.profit)}</td>
-                  <td className="text-right p-2">
+                  <td className="py-1.5 px-2 whitespace-nowrap">{row.name}</td>
+                  <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(row.spend)}</td>
+                  <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(row.revenue)}</td>
+                  <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(row.profit)}</td>
+                  <td className="text-right py-1.5 px-2 whitespace-nowrap">
                     {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
                   </td>
-                  <td className="text-center p-2">
+                  <td className="text-center py-1.5 px-2">
                     <span title={status.label}>{status.icon}</span>
                   </td>
-                  <td className="text-center p-2">
+                  <td className="text-center py-1.5 px-2">
                     <div className="flex items-center justify-center gap-1">
-                      <span className={getTrendColor(trend)}>
-                        {getTrendIcon(trend)}
+                      <span className={getTrendColor(row.trend)}>
+                        {getTrendIcon(row.trend)}
                       </span>
                       <span className="text-xs text-gray-500">
-                        {trend !== 0 ? `${Math.abs(trend).toFixed(1)}%` : 'NC'}
+                        {row.trend !== 0 ? `${Math.abs(row.trend).toFixed(1)}%` : 'NC'}
                       </span>
                     </div>
                   </td>
@@ -293,16 +290,30 @@ export const BuyerDashboard = ({
 
   const { offerPerformance, accountPerformance } = useMemo(() => {
     const latestDate = getLatestDate(data.tableData);
+    const { start: currentStart, end: currentEnd } = getDateRange(timeRange, latestDate);
     
+    // Calculate previous period
+    const periodLength = currentEnd.getTime() - currentStart.getTime();
+    const previousStart = new Date(currentStart.getTime() - periodLength);
+    const previousEnd = new Date(currentStart.getTime() - 1);
+
+    // Get current period data
     const timeRangeData = data.tableData.filter(row => {
       if (typeof row.date !== 'string') return false;
       const [month, day, year] = row.date.split('/').map(Number);
       const rowDate = new Date(year, month - 1, day);
-      const { start, end } = getDateRange(timeRange, latestDate);
-      return rowDate >= start && rowDate <= end;
-    }).filter(row => row.mediaBuyer === buyer);
+      return rowDate >= currentStart && rowDate <= currentEnd && row.mediaBuyer === buyer;
+    });
 
-    // Calculate offer performance
+    // Get previous period data
+    const previousPeriodData = data.tableData.filter(row => {
+      if (typeof row.date !== 'string') return false;
+      const [month, day, year] = row.date.split('/').map(Number);
+      const rowDate = new Date(year, month - 1, day);
+      return rowDate >= previousStart && rowDate <= previousEnd && row.mediaBuyer === buyer;
+    });
+
+    // Calculate offer performance with trends
     const byOffer = timeRangeData.reduce((acc, row) => {
       const key = `${row.network} - ${row.offer}`;
       if (!acc[key]) {
@@ -310,38 +321,60 @@ export const BuyerDashboard = ({
           name: key,
           profit: 0, 
           spend: 0, 
-          revenue: 0 
+          revenue: 0,
+          previousPeriodProfit: 0
         };
       }
       acc[key].profit += row.profit;
       acc[key].spend += row.adSpend;
       acc[key].revenue += row.adRev;
       return acc;
-    }, {} as Record<string, { name: string; profit: number; spend: number; revenue: number; }>);
+    }, {} as Record<string, any>);
 
-    // Calculate account performance
+    // Add previous period data for offers
+    previousPeriodData.forEach(row => {
+      const key = `${row.network} - ${row.offer}`;
+      if (byOffer[key]) {
+        byOffer[key].previousPeriodProfit += row.profit;
+      }
+    });
+
+    // Calculate trends for offers
+    Object.values(byOffer).forEach(offer => {
+      offer.trend = offer.previousPeriodProfit 
+        ? ((offer.profit - offer.previousPeriodProfit) / Math.abs(offer.previousPeriodProfit)) * 100
+        : 0;
+    });
+
+    // Calculate account performance with trends
     const byAccount = timeRangeData.reduce((acc, row) => {
       if (!acc[row.adAccount]) {
         acc[row.adAccount] = { 
-          name: row.adAccount, 
+          name: row.adAccount,
           profit: 0, 
           spend: 0, 
-          revenue: 0 
+          revenue: 0,
+          previousPeriodProfit: 0
         };
       }
       acc[row.adAccount].profit += row.profit;
       acc[row.adAccount].spend += row.adSpend;
       acc[row.adAccount].revenue += row.adRev;
       return acc;
-    }, {} as Record<string, { name: string; profit: number; spend: number; revenue: number; }>);
+    }, {} as Record<string, any>);
 
-    // Add debug logging
-    console.log('Performance calculations:', {
-      timeRange,
-      totalRows: timeRangeData.length,
-      uniqueDates: Array.from(new Set(timeRangeData.map(row => row.date))).sort(),
-      offerCount: Object.keys(byOffer).length,
-      accountCount: Object.keys(byAccount).length
+    // Add previous period data for accounts
+    previousPeriodData.forEach(row => {
+      if (byAccount[row.adAccount]) {
+        byAccount[row.adAccount].previousPeriodProfit += row.profit;
+      }
+    });
+
+    // Calculate trends for accounts
+    Object.values(byAccount).forEach(account => {
+      account.trend = account.previousPeriodProfit 
+        ? ((account.profit - account.previousPeriodProfit) / Math.abs(account.previousPeriodProfit)) * 100
+        : 0;
     });
 
     return {
@@ -403,10 +436,10 @@ export const BuyerDashboard = ({
   const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-4">
+      <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">{buyer}'s Dashboard</h2>
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end">
           <Select value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select time range" />
@@ -425,7 +458,7 @@ export const BuyerDashboard = ({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-4">
         <MetricCard
           title={`${getTimeRangeLabel(timeRange)} Spend`}
           value={metrics.spend}
@@ -449,7 +482,7 @@ export const BuyerDashboard = ({
         timeRange={timeRange}
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="flex flex-col gap-3">
         <SummaryTable 
           data={offerPerformance} 
           title={`${getTimeRangeLabel(timeRange)} Offer Summary`} 

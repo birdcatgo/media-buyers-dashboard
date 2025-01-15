@@ -110,25 +110,71 @@ export const DailyMetrics = ({
   }, [filteredData]);
 
   const mediaPerformance = useMemo(() => {
+    // Get previous day's data
+    const previousDate = new Date(latestDate);
+    previousDate.setDate(previousDate.getDate() - 1);
+    const formattedPreviousDate = `${(previousDate.getMonth() + 1).toString().padStart(2, '0')}/${previousDate.getDate().toString().padStart(2, '0')}/${previousDate.getFullYear()}`;
+
+    // Get previous day's performance
+    const previousData = data.tableData.filter(row => 
+      row.date === formattedPreviousDate && 
+      (buyer === 'all' || row.mediaBuyer === buyer)
+    );
+
     const byBuyer = filteredData.reduce((acc, row) => {
       if (!acc[row.mediaBuyer]) {
         acc[row.mediaBuyer] = { 
           name: row.mediaBuyer,
           profit: 0,
           spend: 0,
-          revenue: 0
+          revenue: 0,
+          previousProfit: 0
         };
       }
       acc[row.mediaBuyer].profit += row.profit;
       acc[row.mediaBuyer].spend += row.adSpend;
       acc[row.mediaBuyer].revenue += row.adRev;
       return acc;
-    }, {} as Record<string, { name: string; profit: number; spend: number; revenue: number; }>);
+    }, {} as Record<string, { 
+      name: string; 
+      profit: number; 
+      spend: number; 
+      revenue: number;
+      previousProfit: number;
+    }>);
 
-    return Object.values(byBuyer).sort((a, b) => b.profit - a.profit);
-  }, [filteredData]);
+    // Add previous day's data
+    previousData.forEach(row => {
+      if (byBuyer[row.mediaBuyer]) {
+        byBuyer[row.mediaBuyer].previousProfit += row.profit;
+      }
+    });
+
+    return Object.values(byBuyer)
+      .sort((a, b) => b.profit - a.profit)
+      .map(buyer => ({
+        ...buyer,
+        trend: buyer.previousProfit 
+          ? ((buyer.profit - buyer.previousProfit) / Math.abs(buyer.previousProfit)) * 100
+          : 0
+      }));
+  }, [filteredData, data.tableData, latestDate, buyer]);
 
   const networkOfferPerformance = useMemo(() => {
+    // Get previous month's data for comparison
+    const currentMonth = latestDate.getMonth();
+    const currentYear = latestDate.getFullYear();
+    
+    // Get all data from previous month
+    const previousMonthData = data.tableData.filter(row => {
+      const [month, , year] = row.date.split('/').map(Number);
+      const rowDate = new Date(year, month - 1);
+      const isPreviousMonth = currentMonth === 0 
+        ? month === 12 && year === currentYear - 1  // December of previous year
+        : month === currentMonth && year === currentYear;  // Previous month same year
+      return isPreviousMonth;
+    });
+
     const byNetworkOffer = filteredData.reduce((acc, row) => {
       // Normalize network and offer for Suited ACA
       const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
@@ -141,7 +187,8 @@ export const DailyMetrics = ({
           offer,
           profit: 0,
           spend: 0,
-          revenue: 0
+          revenue: 0,
+          previousProfit: 0
         };
       }
       acc[key].profit += row.profit;
@@ -154,10 +201,29 @@ export const DailyMetrics = ({
       profit: number;
       spend: number;
       revenue: number;
+      previousProfit: number;
     }>);
 
-    return Object.values(byNetworkOffer).sort((a, b) => b.profit - a.profit);
-  }, [filteredData]);
+    // Add previous month's data
+    previousMonthData.forEach(row => {
+      const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
+      const offer = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.offer;
+      const key = `${network} - ${offer}`;
+      
+      if (byNetworkOffer[key]) {
+        byNetworkOffer[key].previousProfit += row.profit;
+      }
+    });
+
+    return Object.values(byNetworkOffer)
+      .sort((a, b) => b.profit - a.profit)
+      .map(offer => ({
+        ...offer,
+        trend: offer.previousProfit 
+          ? ((offer.profit - offer.previousProfit) / Math.abs(offer.previousProfit)) * 100
+          : 0
+      }));
+  }, [filteredData, data.tableData, latestDate]);
 
   const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
 
@@ -199,6 +265,7 @@ export const DailyMetrics = ({
                   <th className="text-right p-2">Profit</th>
                   <th className="text-right p-2">ROI</th>
                   <th className="text-center p-2">Status</th>
+                  <th className="text-center p-2">Trend</th>
                 </tr>
               </thead>
               <tbody>
@@ -217,6 +284,16 @@ export const DailyMetrics = ({
                       </td>
                       <td className="text-center p-2">
                         <span title={status.label}>{status.icon}</span>
+                      </td>
+                      <td className="text-center p-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <span className={getTrendColor(row.trend)}>
+                            {getTrendIcon(row.trend)}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {row.trend !== 0 ? `${Math.abs(row.trend).toFixed(1)}%` : 'NC'}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -244,6 +321,7 @@ export const DailyMetrics = ({
                   <th className="text-right p-2">Profit</th>
                   <th className="text-right p-2">ROI</th>
                   <th className="text-center p-2">Status</th>
+                  <th className="text-center p-2">Trend</th>
                 </tr>
               </thead>
               <tbody>
@@ -263,6 +341,16 @@ export const DailyMetrics = ({
                       </td>
                       <td className="text-center p-2">
                         <span title={status.label}>{status.icon}</span>
+                      </td>
+                      <td className="text-center p-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <span className={getTrendColor(row.trend)}>
+                            {getTrendIcon(row.trend)}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {row.trend !== 0 ? `${Math.abs(row.trend).toFixed(1)}%` : 'NC'}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   );
