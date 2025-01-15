@@ -386,23 +386,32 @@ export const RawData = ({
                 <TableHead className="text-right cursor-pointer" onClick={() => handleSort('profit')}>
                   Profit {sortConfig?.key === 'profit' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                 </TableHead>
+                <TableHead className="text-right cursor-pointer" onClick={() => handleSort('roi')}>
+                  ROI {sortConfig?.key === 'roi' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedData.map((row, idx) => (
-                <TableRow key={idx}>
-                  <TableCell>
-                    {row.date}
-                  </TableCell>
-                  <TableCell>{row.mediaBuyer}</TableCell>
-                  <TableCell>{row.adAccount}</TableCell>
-                  <TableCell>{row.offer}</TableCell>
-                  <TableCell>{row.network}</TableCell>
-                  <TableCell className="text-right">{formatDollar(row.adSpend)}</TableCell>
-                  <TableCell className="text-right">{formatDollar(row.adRev)}</TableCell>
-                  <TableCell className="text-right">{formatDollar(row.profit)}</TableCell>
-                </TableRow>
-              ))}
+              {sortedData.map((row, idx) => {
+                // Calculate ROI
+                const roi = row.adSpend > 0 ? ((row.profit / row.adSpend) * 100).toFixed(1) + '%' : 'N/A';
+
+                return (
+                  <TableRow key={idx}>
+                    <TableCell>
+                      {row.date}
+                    </TableCell>
+                    <TableCell>{row.mediaBuyer}</TableCell>
+                    <TableCell>{row.adAccount}</TableCell>
+                    <TableCell>{row.offer}</TableCell>
+                    <TableCell>{row.network}</TableCell>
+                    <TableCell className="text-right">{formatDollar(row.adSpend)}</TableCell>
+                    <TableCell className="text-right">{formatDollar(row.adRev)}</TableCell>
+                    <TableCell className="text-right">{formatDollar(row.profit)}</TableCell>
+                    <TableCell className="text-right">{roi}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
