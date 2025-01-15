@@ -5,6 +5,7 @@ import { DashboardData } from '@/types/dashboard';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatDollar } from '@/utils/formatters';
 import { ROIWidget } from './ROIWidget';
+import { getROIStatus } from '@/utils/statusIndicators';
 
 export const DailyMetrics = ({
   buyer,
@@ -201,20 +202,25 @@ export const DailyMetrics = ({
                 </tr>
               </thead>
               <tbody>
-                {mediaPerformance.map((row, idx) => (
-                  <tr key={idx} className="border-b">
-                    <td className="p-2">{row.name}</td>
-                    <td className="text-right p-2">${row.spend.toLocaleString()}</td>
-                    <td className="text-right p-2">${row.revenue.toLocaleString()}</td>
-                    <td className="text-right p-2">${row.profit.toLocaleString()}</td>
-                    <td className="text-right p-2">
-                      {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
-                    </td>
-                    <td className="text-center p-2">
-                      {row.profit > 3000 ? '🟢' : row.profit > 1000 ? '🟡' : row.profit > 0 ? '🟠' : '🔴'}
-                    </td>
-                  </tr>
-                ))}
+                {mediaPerformance.map((row, idx) => {
+                  const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
+                  const status = getROIStatus(roi, row.spend);
+
+                  return (
+                    <tr key={idx} className="border-b">
+                      <td className="p-2">{row.name}</td>
+                      <td className="text-right p-2">${row.spend.toLocaleString()}</td>
+                      <td className="text-right p-2">${row.revenue.toLocaleString()}</td>
+                      <td className="text-right p-2">${row.profit.toLocaleString()}</td>
+                      <td className="text-right p-2">
+                        {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
+                      </td>
+                      <td className="text-center p-2">
+                        <span title={status.label}>{status.icon}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -241,21 +247,26 @@ export const DailyMetrics = ({
                 </tr>
               </thead>
               <tbody>
-                {networkOfferPerformance.map((row, idx) => (
-                  <tr key={idx} className="border-b">
-                    <td className="p-2">{row.network}</td>
-                    <td className="p-2">{row.offer}</td>
-                    <td className="text-right p-2">${row.spend.toLocaleString()}</td>
-                    <td className="text-right p-2">${row.revenue.toLocaleString()}</td>
-                    <td className="text-right p-2">${row.profit.toLocaleString()}</td>
-                    <td className="text-right p-2">
-                      {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
-                    </td>
-                    <td className="text-center p-2">
-                      {row.profit > 3000 ? '🟢' : row.profit > 1000 ? '🟡' : row.profit > 0 ? '🟠' : '🔴'}
-                    </td>
-                  </tr>
-                ))}
+                {networkOfferPerformance.map((row, idx) => {
+                  const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
+                  const status = getROIStatus(roi, row.spend);
+
+                  return (
+                    <tr key={idx} className="border-b">
+                      <td className="p-2">{row.network}</td>
+                      <td className="p-2">{row.offer}</td>
+                      <td className="text-right p-2">${row.spend.toLocaleString()}</td>
+                      <td className="text-right p-2">${row.revenue.toLocaleString()}</td>
+                      <td className="text-right p-2">${row.profit.toLocaleString()}</td>
+                      <td className="text-right p-2">
+                        {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
+                      </td>
+                      <td className="text-center p-2">
+                        <span title={status.label}>{status.icon}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

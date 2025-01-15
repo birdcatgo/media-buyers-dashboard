@@ -6,36 +6,57 @@ import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicat
 
 export const useHighlights = (data: DashboardData) => {
   const { buyerHighlights } = useMemo(() => {
-    // Define and generate buyerHighlights here
     const buyerHighlights: Record<string, HighlightItem[]> = {};
 
-    // Example logic to populate buyerHighlights
     data.tableData.forEach(row => {
       const buyer = row.mediaBuyer;
       if (!buyerHighlights[buyer]) {
         buyerHighlights[buyer] = [];
       }
-      // Add logic to populate highlights for each buyer
+
+      // Calculate metrics
+      const metrics = calculateMetrics(row);
+      const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
+      
+      // Get status using shared utility
+      const status = getROIStatus(roi, metrics.spend);
+      
+      // Calculate trend
+      const trend = metrics.previousProfit 
+        ? ((metrics.profit - metrics.previousProfit) / Math.abs(metrics.previousProfit)) * 100
+        : 0;
+
+      // Create highlight item
+      const highlight: HighlightItem = {
+        title: `${row.network} - ${row.offer}`,
+        metrics: {
+          spend: metrics.spend,
+          revenue: metrics.revenue,
+          profit: metrics.profit,
+          roi: roi
+        },
+        status: {
+          icon: status.icon,
+          color: status.color,
+          label: status.label
+        },
+        trend: {
+          icon: getTrendIcon(trend),
+          color: getTrendColor(trend),
+          value: trend
+        }
+      };
+
+      buyerHighlights[buyer].push(highlight);
+    });
+
+    // Sort highlights by profit
+    Object.keys(buyerHighlights).forEach(buyer => {
+      buyerHighlights[buyer].sort((a, b) => b.metrics.profit - a.metrics.profit);
     });
 
     return { buyerHighlights };
   }, [data]);
 
   return { buyerHighlights };
-};
-
-// Update the ROI status calculation in the hook
-const getHighlightStatus = (roi: number, spend: number) => {
-  const status = getROIStatus(roi, spend);
-  return {
-    icon: status.icon,
-    color: status.color,
-    label: status.label
-  };
-};
-
-// Update trend calculation
-const getTrendIndicator = (trend: number) => ({
-  icon: getTrendIcon(trend),
-  color: getTrendColor(trend)
-}); 
+}; 
