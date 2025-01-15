@@ -19,6 +19,7 @@ import { DollarSign, TrendingUp, PieChart } from 'lucide-react';
 import { DashboardData } from '@/types/dashboard';
 import { formatDollar } from '@/utils/formatters';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ROIWidget } from './ROIWidget';
 
 const getStatusEmoji = (profit: number) => {
   if (profit > 3000) return '🟢';
@@ -402,9 +403,11 @@ export const MonthlyMetrics = ({
     return Object.values(byBuyer);
   }, [filteredData]);
 
+  const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
+
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
           title="MTD Spend"
           value={metrics.spend}
@@ -419,8 +422,8 @@ export const MonthlyMetrics = ({
           title="MTD Profit"
           value={metrics.profit}
           icon={<PieChart className="h-6 w-6" />}
-          status={getStatusEmoji(metrics.profit)}
         />
+        <ROIWidget roi={roi} />
       </div>
 
       <div className="space-y-6">

@@ -4,6 +4,7 @@ import { DollarSign, TrendingUp, PieChart } from 'lucide-react';
 import { DashboardData } from '@/types/dashboard';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatDollar } from '@/utils/formatters';
+import { ROIWidget } from './ROIWidget';
 
 export const DailyMetrics = ({
   buyer,
@@ -157,10 +158,12 @@ export const DailyMetrics = ({
     return Object.values(byNetworkOffer).sort((a, b) => b.profit - a.profit);
   }, [filteredData]);
 
+  const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
+
   return (
     <div className="space-y-6">
       {/* Metrics Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
           title={`${dateDisplay}'s Spend`}
           value={metrics.spend}
@@ -176,6 +179,7 @@ export const DailyMetrics = ({
           value={metrics.profit}
           icon={<PieChart className="h-6 w-6" />}
         />
+        <ROIWidget roi={roi} />
       </div>
 
       {/* Media Buyer Summary Table */}

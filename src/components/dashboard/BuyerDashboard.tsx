@@ -4,6 +4,7 @@ import { DollarSign, TrendingUp, PieChart } from 'lucide-react';
 import { DashboardData } from '@/types/dashboard';
 import { formatDollar } from '@/utils/formatters';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { ROIWidget } from './ROIWidget';
 
 interface MetricCardProps {
   title: string;
@@ -125,11 +126,13 @@ export const BuyerDashboard = ({ buyer, data, offer = 'all', network = 'all' }: 
       });
   }, [data.tableData, buyer]);
 
+  const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">{buyer}'s Dashboard</h2>
       
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
           title="Total Spend"
           value={metrics.spend}
@@ -145,6 +148,7 @@ export const BuyerDashboard = ({ buyer, data, offer = 'all', network = 'all' }: 
           value={metrics.profit}
           icon={<PieChart className="h-6 w-6" />}
         />
+        <ROIWidget roi={roi} />
       </div>
 
       <ProfitChart data={dailyProfitData} />
