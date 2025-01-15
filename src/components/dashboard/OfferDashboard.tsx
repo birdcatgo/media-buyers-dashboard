@@ -71,49 +71,72 @@ const getDateRange = (timeRange: TimeRange, latestDate: Date): { start: Date, en
     latestDate = new Date();
   }
 
-  let end = new Date(latestDate);
   let start: Date;
+  let end = new Date(latestDate);
+  end.setHours(23, 59, 59, 999);
 
   switch (timeRange) {
     case 'yesterday':
+      // For yesterday, we want the latest date as end and one day before as start
+      end = new Date(latestDate);
+      end.setHours(23, 59, 59, 999);
+      
       start = new Date(latestDate);
-      start.setDate(latestDate.getDate() - 1);
-      end = new Date(start);
+      start.setDate(latestDate.getDate());  // Set to current date
+      start.setHours(0, 0, 0, 0);
+      
+      // Debug log for yesterday dates
+      console.log('Yesterday Range Debug:', {
+        latestDate: latestDate.toLocaleDateString(),
+        start: start.toLocaleDateString(),
+        end: end.toLocaleDateString(),
+        dateStrings: {
+          latestDateStr: `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`,
+          yesterdayStr: `${(start.getMonth() + 1).toString().padStart(2, '0')}/${start.getDate().toString().padStart(2, '0')}/${start.getFullYear()}`
+        }
+      });
       break;
+
     case 'mtd':
-      start = new Date(end.getFullYear(), end.getMonth(), 1);
+      start = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
       break;
+
     case '7d':
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 6);
       break;
+
     case '14d':
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 13);
       break;
+
     case '30d':
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 29);
       break;
+
     case '60d':
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 59);
       break;
+
     case 'lastMonth':
       start = new Date(latestDate.getFullYear(), latestDate.getMonth() - 1, 1);
       end = new Date(latestDate.getFullYear(), latestDate.getMonth(), 0);
       break;
+
     case 'ytd':
       start = new Date(latestDate.getFullYear(), 0, 1);
       break;
+
     default:
-      start = end;
-      end.setDate(end.getDate() + 1);
+      start = new Date(latestDate);
+      break;
   }
 
-  // Set hours to ensure full day coverage
+  // Set hours for start date
   start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
 
   return { start, end };
 };
@@ -122,6 +145,24 @@ const getDateRange = (timeRange: TimeRange, latestDate: Date): { start: Date, en
 const getFilteredData = (data: any[], timeRange: TimeRange) => {
   const latestDate = getLatestDate(data);
   const { start, end } = getDateRange(timeRange, latestDate);
+  
+  // Debug log for filtering
+  console.log('Filtering Data:', {
+    timeRange,
+    dateRange: {
+      start: start.toLocaleDateString(),
+      end: end.toLocaleDateString()
+    },
+    sampleData: data.slice(0, 2).map(row => ({
+      date: row.date,
+      isIncluded: (() => {
+        const [month, day, year] = row.date.split('/').map(Number);
+        const rowDate = new Date(year, month - 1, day);
+        rowDate.setHours(12, 0, 0, 0);
+        return rowDate >= start && rowDate <= end;
+      })()
+    }))
+  });
   
   return data.filter(row => {
     if (typeof row.date !== 'string') return false;
@@ -136,14 +177,28 @@ const getFilteredData = (data: any[], timeRange: TimeRange) => {
 
 // Add getLatestDate helper function
 const getLatestDate = (data: any[]): Date => {
+  // Get all valid dates from the data
   const dates = data
     .map(row => {
+      if (!row.date) return null;
       const [month, day, year] = row.date.split('/').map(Number);
-      return new Date(year, month - 1, day);
+      const date = new Date(year, month - 1, day);
+      return isNaN(date.getTime()) ? null : date;
     })
-    .filter(date => !isNaN(date.getTime()));
+    .filter((date): date is Date => date !== null);
+
+  // Find the most recent date
+  const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
   
-  return new Date(Math.max(...dates.map(d => d.getTime())));
+  // Debug log
+  console.log('Latest Date Debug:', {
+    allDates: dates.map(d => d.toLocaleDateString()),
+    maxDate: maxDate.toLocaleDateString(),
+    dateCount: dates.length,
+    sampleRows: data.slice(0, 2).map(row => row.date)
+  });
+
+  return maxDate;
 };
 
 // Add type for metric

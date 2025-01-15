@@ -191,19 +191,39 @@ const getLatestDate = (data: any[]): Date => {
     })
     .filter(date => !isNaN(date.getTime()));
   
-  return new Date(Math.max(...dates.map(d => d.getTime())));
+  const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+  
+  // Debug log to verify latest date
+  console.log('Latest date calculation:', {
+    allDates: dates.map(d => d.toLocaleDateString()),
+    maxDate: maxDate.toLocaleDateString()
+  });
+  
+  return maxDate;
 };
 
 // Add this helper function after getLatestDate
 const getDateRange = (timeRange: TimeRange, latestDate: Date): { start: Date, end: Date } => {
-  let end = latestDate;
+  let end = new Date(latestDate);
   let start: Date;
 
   switch (timeRange) {
     case 'yesterday':
+      // For yesterday, we want the day before the latest date
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 1);
-      return { start, end: start }; // For yesterday, end is same as start
+      start.setHours(0, 0, 0, 0);
+      end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      
+      // Debug log for yesterday dates
+      console.log('Yesterday date range:', {
+        latestDate: latestDate.toLocaleDateString(),
+        start: start.toLocaleDateString(),
+        end: end.toLocaleDateString()
+      });
+      
+      return { start, end };
     case '7d':
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 6);
@@ -265,23 +285,24 @@ export const BuyerDashboard = ({
   const [customDate, setCustomDate] = useState(new Date('2025-01-06'));
 
   const filteredData = useMemo(() => {
+    const latestDate = getLatestDate(data.tableData);
+    
     return data.tableData.filter(row => {
       if (typeof row.date !== 'string') return false;
       
       // Parse MM/DD/YYYY format
       const [month, day, year] = row.date.split('/').map(Number);
-
-      // Add debug logging
-      console.log('Filtering row:', {
-        date: row.date,
-        parsed: { month, day, year },
-        mediaBuyer: row.mediaBuyer,
-        isMatch: month === 1 && year === 2025 && row.mediaBuyer === buyer
-      });
-
-      return month === 1 && year === 2025 && row.mediaBuyer === buyer;
+      const rowDate = new Date(year, month - 1, day);
+      
+      // Get date range based on timeRange
+      const { start, end } = getDateRange(timeRange, latestDate);
+      
+      // Check if date is within range and matches buyer
+      return rowDate >= start && 
+             rowDate <= end && 
+             row.mediaBuyer === buyer;
     });
-  }, [data.tableData, buyer]);
+  }, [data.tableData, buyer, timeRange]);
 
   const metrics = useMemo(() => {
     const latestDate = getLatestDate(data.tableData);
@@ -313,60 +334,88 @@ export const BuyerDashboard = ({
 
   const { offerPerformance, accountPerformance } = useMemo(() => {
     const latestDate = getLatestDate(data.tableData);
+    let timeRangeData, previousPeriodData;
     
-    // Format dates to MM/DD/YYYY strings for comparison
-    const formatDateString = (date: Date) => {
-      return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}/${date.getFullYear()}`;
-    };
+    // Move date calculations outside the if block
+    const { start: yesterday } = getDateRange('yesterday', latestDate);
+    const yesterdayStr = `${(yesterday.getMonth() + 1).toString().padStart(2, '0')}/${yesterday.getDate().toString().padStart(2, '0')}/${yesterday.getFullYear()}`;
+    
+    const dayBeforeYesterday = new Date(yesterday);
+    dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 1);
+    const dayBeforeYesterdayStr = `${(dayBeforeYesterday.getMonth() + 1).toString().padStart(2, '0')}/${dayBeforeYesterday.getDate().toString().padStart(2, '0')}/${dayBeforeYesterday.getFullYear()}`;
 
-    // Special handling for "yesterday" time range
-    let previousDateStr, currentDateStr;
-    
     if (timeRange === 'yesterday') {
-      // Yesterday's date (one day before latest)
-      const yesterdayDate = new Date(latestDate);
-      yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-      currentDateStr = formatDateString(yesterdayDate);
+      // Filter data for exact date matches
+      timeRangeData = data.tableData.filter(row => 
+        row.date === yesterdayStr && row.mediaBuyer === buyer
+      );
       
-      // Day before yesterday
-      const dayBeforeYesterday = new Date(yesterdayDate);
-      dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 1);
-      previousDateStr = formatDateString(dayBeforeYesterday);
-    }
+      previousPeriodData = data.tableData.filter(row => 
+        row.date === dayBeforeYesterdayStr && row.mediaBuyer === buyer
+      );
 
-    // Get current period data
-    const timeRangeData = data.tableData.filter(row => {
-      if (timeRange === 'yesterday') {
-        return row.date === currentDateStr && row.mediaBuyer === buyer;
-      }
+      // Debug log for Leadnomic Solar specifically
+      const leadnomicSolarCurrent = timeRangeData.filter(row => 
+        row.network === 'Leadnomic' && row.offer === 'Solar'
+      );
+      const leadnomicSolarPrevious = previousPeriodData.filter(row => 
+        row.network === 'Leadnomic' && row.offer === 'Solar'
+      );
 
-      // For other time ranges
-      const [month, day, year] = row.date.split('/').map(Number);
-      const rowDate = new Date(year, month - 1, day);
-      const { start, end } = getDateRange(timeRange, latestDate);
-      
-      return rowDate >= start && 
-             rowDate <= end && 
-             row.mediaBuyer === buyer;
-    });
-
-    // Get previous period data
-    const previousPeriodData = data.tableData.filter(row => {
-      if (timeRange === 'yesterday') {
-        return row.date === previousDateStr && row.mediaBuyer === buyer;
-      }
-
-      // For other time ranges
-      const [month, day, year] = row.date.split('/').map(Number);
-      const rowDate = new Date(year, month - 1, day);
+      console.log('Leadnomic Solar Raw Data:', {
+        yesterday: {
+          date: yesterdayStr,
+          data: leadnomicSolarCurrent,
+          totalProfit: leadnomicSolarCurrent.reduce((sum, row) => sum + row.profit, 0)
+        },
+        dayBefore: {
+          date: dayBeforeYesterdayStr,
+          data: leadnomicSolarPrevious,
+          totalProfit: leadnomicSolarPrevious.reduce((sum, row) => sum + row.profit, 0)
+        }
+      });
+    } else {
+      // Get current period range
       const { start: currentStart, end: currentEnd } = getDateRange(timeRange, latestDate);
+      
+      // Calculate previous period
       const periodLength = currentEnd.getTime() - currentStart.getTime();
       const previousStart = new Date(currentStart.getTime() - periodLength);
       const previousEnd = new Date(currentStart.getTime() - 1);
-      
-      return rowDate >= previousStart && 
-             rowDate <= previousEnd && 
-             row.mediaBuyer === buyer;
+
+      // Filter data for current and previous periods
+      timeRangeData = data.tableData.filter(row => {
+        const [month, day, year] = row.date.split('/').map(Number);
+        const rowDate = new Date(year, month - 1, day);
+        return rowDate >= currentStart && 
+               rowDate <= currentEnd && 
+               row.mediaBuyer === buyer;
+      });
+
+      previousPeriodData = data.tableData.filter(row => {
+        const [month, day, year] = row.date.split('/').map(Number);
+        const rowDate = new Date(year, month - 1, day);
+        return rowDate >= previousStart && 
+               rowDate <= previousEnd && 
+               row.mediaBuyer === buyer;
+      });
+    }
+
+    // Debug log for all cases
+    console.log('Raw Data Check:', {
+      timeRange,
+      dates: {
+        yesterday: yesterdayStr,
+        dayBefore: dayBeforeYesterdayStr
+      },
+      leadnomicSolarData: {
+        current: timeRangeData?.filter(row => 
+          row.network === 'Leadnomic' && row.offer === 'Solar'
+        ),
+        previous: previousPeriodData?.filter(row => 
+          row.network === 'Leadnomic' && row.offer === 'Solar'
+        )
+      }
     });
 
     // Calculate offer performance with trends
@@ -397,8 +446,31 @@ export const BuyerDashboard = ({
 
     // Calculate trends for offers
     Object.values(byOffer).forEach(offer => {
-      const trend = getSimplifiedTrend(offer.profit, offer.previousPeriodProfit);
-      offer.trend = trend;
+      if (offer.name === 'Leadnomic - Solar') {
+        // More detailed logging for Leadnomic Solar
+        console.log('Leadnomic Solar Detailed:', {
+          timeRange,
+          currentProfit: offer.profit,
+          previousProfit: offer.previousPeriodProfit,
+          rawCurrentData: timeRangeData.filter(row => 
+            row.network === 'Leadnomic' && row.offer === 'Solar'
+          ),
+          rawPreviousData: previousPeriodData.filter(row => 
+            row.network === 'Leadnomic' && row.offer === 'Solar'
+          ),
+          calculatedTrend: getSimplifiedTrend(offer.profit, offer.previousPeriodProfit)
+        });
+      }
+
+      // Add debug logging for all offers
+      console.log('Trend calculation:', {
+        offer: offer.name,
+        currentProfit: offer.profit,
+        previousProfit: offer.previousPeriodProfit,
+        trend: getSimplifiedTrend(offer.profit, offer.previousPeriodProfit)
+      });
+      
+      offer.trend = getSimplifiedTrend(offer.profit, offer.previousPeriodProfit);
     });
 
     // Calculate account performance with trends

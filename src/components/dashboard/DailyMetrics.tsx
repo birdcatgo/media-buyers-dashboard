@@ -288,7 +288,7 @@ export const DailyMetrics = ({
                             {getTrendIcon(row.trend)}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {row.trend !== 0 ? `${Math.abs(row.trend).toFixed(1)}%` : 'NC'}
+                            {row.trend.label}
                           </span>
                         </div>
                       </td>
@@ -345,7 +345,7 @@ export const DailyMetrics = ({
                             {getTrendIcon(row.trend)}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {row.trend !== 0 ? `${Math.abs(row.trend).toFixed(1)}%` : 'NC'}
+                            {row.trend.label}
                           </span>
                         </div>
                       </td>

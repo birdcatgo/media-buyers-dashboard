@@ -25,12 +25,9 @@ export const getROIStatus = (roi: number, spend: number = 0) => {
   };
 };
 
-export const getTrendIcon = (trend: number) => {
-  if (trend === 0 || isNaN(trend)) return '–';
-  return trend > 0 ? '↑' : '↓';
-};
+export const getTrendIcon = (trend: { icon: string }) => trend.icon;
 
-export const getTrendColor = (trend: number) => {
-  if (trend === 0 || isNaN(trend)) return 'text-gray-500';
-  return trend > 0 ? 'text-green-500' : 'text-red-500';
-}; 
+export const getTrendColor = (trend: { type: string }) => 
+  trend.type === 'positive' ? 'text-green-500' : 
+  trend.type === 'negative' ? 'text-red-500' : 
+  'text-gray-500'; 

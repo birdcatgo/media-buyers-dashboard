@@ -20,6 +20,7 @@ import { DashboardData } from '@/types/dashboard';
 import { formatDollar } from '@/utils/formatters';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ROIWidget } from './ROIWidget';
+import { getSimplifiedTrend } from '@/utils/trendIndicators';
 
 const getStatusEmoji = (profit: number) => {
   if (profit > 3000) return '🟢';
@@ -355,10 +356,8 @@ export const MonthlyMetrics = ({
   // Offer performance array for bar chart
   const offerPerformance = useMemo(() => {
     const byOffer = filteredData.reduce((acc, row) => {
-      // Normalize network and offer for Suited ACA
       const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
       const offer = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.offer;
-      // Combine network and offer for the key
       const key = `${network} - ${offer}`;
       
       if (!acc[key]) {
@@ -366,18 +365,17 @@ export const MonthlyMetrics = ({
           name: key,
           profit: 0,
           spend: 0,
-          revenue: 0
+          revenue: 0,
+          previousPeriodProfit: 0
         };
       }
       acc[key].profit += row.profit;
       acc[key].spend += row.adSpend;
       acc[key].revenue += row.adRev;
       return acc;
-    }, {} as Record<string, { name: string; profit: number; spend: number; revenue: number; }>);
+    }, {} as Record<string, any>);
 
-    // Convert to array and sort by profit
-    return Object.values(byOffer)
-      .sort((a, b) => b.profit - a.profit);
+    return Object.values(byOffer).sort((a, b) => b.profit - a.profit);
   }, [filteredData]);
 
   // Buyer performance array for table or bar chart
@@ -388,17 +386,15 @@ export const MonthlyMetrics = ({
           name: row.mediaBuyer,
           profit: 0,
           spend: 0,
-          revenue: 0
+          revenue: 0,
+          previousPeriodProfit: 0
         };
       }
       acc[row.mediaBuyer].profit += row.profit;
       acc[row.mediaBuyer].spend += row.adSpend;
       acc[row.mediaBuyer].revenue += row.adRev;
       return acc;
-    }, {} as Record<
-      string,
-      { name: string; profit: number; spend: number; revenue: number }
-    >);
+    }, {} as Record<string, any>);
 
     return Object.values(byBuyer);
   }, [filteredData]);
@@ -426,11 +422,11 @@ export const MonthlyMetrics = ({
         <ROIWidget roi={roi} />
       </div>
 
-      <div className="space-y-6">
+      <div>
         <TrendChart data={dailyTrendData} title="Daily Profit Trend" />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="space-y-6">
         <SummaryTable data={offerPerformance} title="MTD Offer Summary" />
         <SummaryTable data={buyerPerformance} title="MTD Media Buyer Performance" />
       </div>
@@ -438,40 +434,63 @@ export const MonthlyMetrics = ({
   );
 };
 
-const SummaryTable = ({ data, title }: { data: any[]; title: string }) => (
-  <Card>
-    <CardHeader>
-      <CardTitle>{title}</CardTitle>
-    </CardHeader>
-    <CardContent>
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b">
-              <th className="text-left p-2">Name</th>
-              <th className="text-right p-2">MTD Spend</th>
-              <th className="text-right p-2">MTD Revenue</th>
-              <th className="text-right p-2">MTD Profit</th>
-              <th className="text-right p-2">ROI</th>
-              <th className="text-center p-2">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((row, idx) => (
-              <tr key={idx} className="border-b">
-                <td className="p-2">{row.name}</td>
-                <td className="text-right p-2">{formatDollar(row.spend)}</td>
-                <td className="text-right p-2">{formatDollar(row.revenue)}</td>
-                <td className="text-right p-2">{formatDollar(row.profit)}</td>
-                <td className="text-right p-2">
-                  {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
-                </td>
-                <td className="text-center p-2">{getStatusEmoji(row.profit)}</td>
+const SummaryTable = ({ data, title }: { data: any[]; title: string }) => {
+  // Add previous period comparison
+  const dataWithTrends = data.map(row => ({
+    ...row,
+    trend: getSimplifiedTrend(row.profit, row.previousPeriodProfit || 0)
+  }));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left p-2">Name</th>
+                <th className="text-right p-2">MTD Spend</th>
+                <th className="text-right p-2">MTD Revenue</th>
+                <th className="text-right p-2">MTD Profit</th>
+                <th className="text-right p-2">ROI</th>
+                <th className="text-center p-2">Status</th>
+                <th className="text-center p-2">Trend</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </CardContent>
-  </Card>
-);
+            </thead>
+            <tbody>
+              {dataWithTrends.map((row, idx) => (
+                <tr key={idx} className="border-b">
+                  <td className="p-2">{row.name}</td>
+                  <td className="text-right p-2">{formatDollar(row.spend)}</td>
+                  <td className="text-right p-2">{formatDollar(row.revenue)}</td>
+                  <td className="text-right p-2">{formatDollar(row.profit)}</td>
+                  <td className="text-right p-2">
+                    {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
+                  </td>
+                  <td className="text-center p-2">{getStatusEmoji(row.profit)}</td>
+                  <td className="text-center p-2">
+                    <div className="flex items-center justify-center gap-1">
+                      <span className={
+                        row.trend.type === 'positive' ? 'text-green-500' :
+                        row.trend.type === 'negative' ? 'text-red-500' :
+                        'text-gray-500'
+                      }>
+                        {row.trend.icon}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {row.trend.label}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
