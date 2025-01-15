@@ -109,11 +109,15 @@ const SummaryTable = ({ data, title, timeRange }: {
                   </td>
                   <td className="text-center py-1.5 px-2">
                     <div className="flex items-center justify-center gap-1">
-                      <span className={getTrendColor(row.trend)}>
-                        {getTrendIcon(row.trend)}
+                      <span className={
+                        row.trend.type === 'positive' ? 'text-green-500' :
+                        row.trend.type === 'negative' ? 'text-red-500' :
+                        'text-gray-500'
+                      }>
+                        {row.trend.icon}
                       </span>
                       <span className="text-xs text-gray-500">
-                        {row.trend !== 0 ? `${Math.abs(row.trend).toFixed(1)}%` : 'NC'}
+                        {row.trend.label}
                       </span>
                     </div>
                   </td>
@@ -232,6 +236,25 @@ const getDateRange = (timeRange: TimeRange, latestDate: Date): { start: Date, en
   }
 };
 
+// Add this helper function to get a simplified trend indicator
+const getSimplifiedTrend = (current: number, previous: number) => {
+  if (previous === 0 && current === 0) return { icon: '–', label: 'No Change', type: 'neutral' };
+  if (previous === 0) {
+    return current > 0 
+      ? { icon: '↑', label: 'Positive Signs', type: 'positive' }
+      : { icon: '↓', label: 'Negative Signs', type: 'negative' };
+  }
+  
+  const change = current - previous;
+  if (Math.abs(change) < 0.01) return { icon: '–', label: 'Stable', type: 'neutral' };
+  
+  if (change > 0) {
+    return { icon: '↑', label: 'Improving', type: 'positive' };
+  } else {
+    return { icon: '↓', label: 'Declining', type: 'negative' };
+  }
+};
+
 export const BuyerDashboard = ({ 
   buyer, 
   data,
@@ -290,27 +313,60 @@ export const BuyerDashboard = ({
 
   const { offerPerformance, accountPerformance } = useMemo(() => {
     const latestDate = getLatestDate(data.tableData);
-    const { start: currentStart, end: currentEnd } = getDateRange(timeRange, latestDate);
     
-    // Calculate previous period
-    const periodLength = currentEnd.getTime() - currentStart.getTime();
-    const previousStart = new Date(currentStart.getTime() - periodLength);
-    const previousEnd = new Date(currentStart.getTime() - 1);
+    // Format dates to MM/DD/YYYY strings for comparison
+    const formatDateString = (date: Date) => {
+      return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}/${date.getFullYear()}`;
+    };
+
+    // Special handling for "yesterday" time range
+    let previousDateStr, currentDateStr;
+    
+    if (timeRange === 'yesterday') {
+      // Yesterday's date (one day before latest)
+      const yesterdayDate = new Date(latestDate);
+      yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+      currentDateStr = formatDateString(yesterdayDate);
+      
+      // Day before yesterday
+      const dayBeforeYesterday = new Date(yesterdayDate);
+      dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 1);
+      previousDateStr = formatDateString(dayBeforeYesterday);
+    }
 
     // Get current period data
     const timeRangeData = data.tableData.filter(row => {
-      if (typeof row.date !== 'string') return false;
+      if (timeRange === 'yesterday') {
+        return row.date === currentDateStr && row.mediaBuyer === buyer;
+      }
+
+      // For other time ranges
       const [month, day, year] = row.date.split('/').map(Number);
       const rowDate = new Date(year, month - 1, day);
-      return rowDate >= currentStart && rowDate <= currentEnd && row.mediaBuyer === buyer;
+      const { start, end } = getDateRange(timeRange, latestDate);
+      
+      return rowDate >= start && 
+             rowDate <= end && 
+             row.mediaBuyer === buyer;
     });
 
     // Get previous period data
     const previousPeriodData = data.tableData.filter(row => {
-      if (typeof row.date !== 'string') return false;
+      if (timeRange === 'yesterday') {
+        return row.date === previousDateStr && row.mediaBuyer === buyer;
+      }
+
+      // For other time ranges
       const [month, day, year] = row.date.split('/').map(Number);
       const rowDate = new Date(year, month - 1, day);
-      return rowDate >= previousStart && rowDate <= previousEnd && row.mediaBuyer === buyer;
+      const { start: currentStart, end: currentEnd } = getDateRange(timeRange, latestDate);
+      const periodLength = currentEnd.getTime() - currentStart.getTime();
+      const previousStart = new Date(currentStart.getTime() - periodLength);
+      const previousEnd = new Date(currentStart.getTime() - 1);
+      
+      return rowDate >= previousStart && 
+             rowDate <= previousEnd && 
+             row.mediaBuyer === buyer;
     });
 
     // Calculate offer performance with trends
@@ -341,9 +397,8 @@ export const BuyerDashboard = ({
 
     // Calculate trends for offers
     Object.values(byOffer).forEach(offer => {
-      offer.trend = offer.previousPeriodProfit 
-        ? ((offer.profit - offer.previousPeriodProfit) / Math.abs(offer.previousPeriodProfit)) * 100
-        : 0;
+      const trend = getSimplifiedTrend(offer.profit, offer.previousPeriodProfit);
+      offer.trend = trend;
     });
 
     // Calculate account performance with trends
@@ -372,9 +427,8 @@ export const BuyerDashboard = ({
 
     // Calculate trends for accounts
     Object.values(byAccount).forEach(account => {
-      account.trend = account.previousPeriodProfit 
-        ? ((account.profit - account.previousPeriodProfit) / Math.abs(account.previousPeriodProfit)) * 100
-        : 0;
+      const trend = getSimplifiedTrend(account.profit, account.previousPeriodProfit);
+      account.trend = trend;
     });
 
     return {

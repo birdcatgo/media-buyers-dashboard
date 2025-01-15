@@ -1,14 +1,17 @@
 import { useMemo } from 'react';
-import { DashboardData } from '@/types/dashboard';
+import { DashboardData, TableData } from '@/types/dashboard';
 import { calculateMetrics } from '@/utils/highlightUtils';
 import { HighlightItem } from '@/components/dashboard/HighlightCard';
 import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
+import { getSimplifiedTrend } from '@/utils/trendIndicators';
 
 export const useHighlights = (data: DashboardData) => {
+  const tableData = Array.isArray(data.tableData) ? data.tableData : [];
+  
   const { buyerHighlights } = useMemo(() => {
     const buyerHighlights: Record<string, HighlightItem[]> = {};
 
-    data.tableData.forEach(row => {
+    tableData.forEach(row => {
       const buyer = row.mediaBuyer;
       if (!buyerHighlights[buyer]) {
         buyerHighlights[buyer] = [];
@@ -40,11 +43,7 @@ export const useHighlights = (data: DashboardData) => {
           color: status.color,
           label: status.label
         },
-        trend: {
-          icon: getTrendIcon(trend),
-          color: getTrendColor(trend),
-          value: trend
-        }
+        trend: getSimplifiedTrend(metrics.profit, metrics.previousProfit)
       };
 
       buyerHighlights[buyer].push(highlight);
@@ -56,7 +55,7 @@ export const useHighlights = (data: DashboardData) => {
     });
 
     return { buyerHighlights };
-  }, [data]);
+  }, [tableData]);
 
   return { buyerHighlights };
 }; 

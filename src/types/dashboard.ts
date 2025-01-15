@@ -1,13 +1,13 @@
-export interface TableData {
-    date: string;
-    mediaBuyer: string;
-    network: string;
-    offer: string;
-    adAccount: string;
-    adRev: number;
-    adSpend: number;
-    profit: number;
-}
+export type TableData = Array<{
+  date: string;
+  mediaBuyer: string;
+  network: string;
+  offer: string;
+  adAccount: string;
+  adSpend: number;
+  adRev: number;
+  profit: number;
+}>;
 
 export interface DailyData {
     date: string;
@@ -26,7 +26,7 @@ export interface DashboardData {
     dailyData: DailyData[];
     offerData: PerformanceData[];
     networkData: PerformanceData[];
-    tableData: TableData[];
+    tableData: TableData;
     overviewData?: any[];
 }
 

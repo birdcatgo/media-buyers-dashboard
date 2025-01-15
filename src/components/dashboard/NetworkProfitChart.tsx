@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TableData } from '@/types/dashboard';
 
-const NetworkProfitChart = ({ data }: { data: TableData[] }) => {
+const NetworkProfitChart = ({ data }: { data: TableData }) => {
   const chartData = React.useMemo(() => {
     const grouped = data.reduce((acc, row) => {
       const key = `${row.network}-${row.offer}`;

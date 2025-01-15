@@ -6,6 +6,7 @@ import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveCo
 import { formatDollar } from '@/utils/formatters';
 import { ROIWidget } from './ROIWidget';
 import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
+import { getSimplifiedTrend } from '@/utils/trendIndicators';
 
 export const DailyMetrics = ({
   buyer,
@@ -154,9 +155,7 @@ export const DailyMetrics = ({
       .sort((a, b) => b.profit - a.profit)
       .map(buyer => ({
         ...buyer,
-        trend: buyer.previousProfit 
-          ? ((buyer.profit - buyer.previousProfit) / Math.abs(buyer.previousProfit)) * 100
-          : 0
+        trend: getSimplifiedTrend(buyer.profit, buyer.previousProfit)
       }));
   }, [filteredData, data.tableData, latestDate, buyer]);
 
@@ -219,9 +218,7 @@ export const DailyMetrics = ({
       .sort((a, b) => b.profit - a.profit)
       .map(offer => ({
         ...offer,
-        trend: offer.previousProfit 
-          ? ((offer.profit - offer.previousProfit) / Math.abs(offer.previousProfit)) * 100
-          : 0
+        trend: getSimplifiedTrend(offer.profit, offer.previousProfit)
       }));
   }, [filteredData, data.tableData, latestDate]);
 

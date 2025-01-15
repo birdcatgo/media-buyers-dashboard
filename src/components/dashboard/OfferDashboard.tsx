@@ -5,6 +5,7 @@ import { DashboardData } from '@/types/dashboard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDollar } from '@/utils/formatters';
 import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
+import { getSimplifiedTrend } from '@/utils/trendIndicators';
 
 type TimeRange = 'yesterday' | '7d' | '14d' | 'mtd' | '30d' | '60d' | 'lastMonth' | 'ytd';
 
@@ -710,10 +711,7 @@ export const OfferDashboard = ({
                 {sortedOfferPerformance.map((row, idx) => {
                   const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
                   const status = getROIStatus(roi, row.spend);
-                  
-                  const trend = row.previousPeriodProfit 
-                    ? ((row.profit - row.previousPeriodProfit) / Math.abs(row.previousPeriodProfit)) * 100
-                    : 0;
+                  const trend = getSimplifiedTrend(row.profit, row.previousPeriodProfit);
 
                   return (
                     <tr key={idx} className="border-b">
@@ -729,11 +727,15 @@ export const OfferDashboard = ({
                       </td>
                       <td className="text-center p-2">
                         <div className="flex items-center justify-center gap-1">
-                          <span className={getTrendColor(trend)}>
-                            {getTrendIcon(trend)}
+                          <span className={
+                            trend.type === 'positive' ? 'text-green-500' :
+                            trend.type === 'negative' ? 'text-red-500' :
+                            'text-gray-500'
+                          }>
+                            {trend.icon}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {trend !== 0 ? `${Math.abs(trend).toFixed(1)}%` : 'NC'}
+                            {trend.label}
                           </span>
                         </div>
                       </td>
