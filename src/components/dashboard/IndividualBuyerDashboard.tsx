@@ -7,6 +7,7 @@ import { RawData } from './RawData';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDollar } from '@/utils/formatters';
 import { normalizeNetworkOffer } from '@/utils/dataUtils';
+import { ROIWidget } from './ROIWidget';
 
 type TimeRange = 'yesterday' | '7d' | '14d' | 'mtd' | '30d' | '60d' | 'lastMonth' | 'ytd';
 
@@ -83,6 +84,7 @@ const SummaryTable = ({ data, title, timeRange }: {
               <th className="text-right p-2">{getTimeRangeLabel(timeRange)} Spend</th>
               <th className="text-right p-2">{getTimeRangeLabel(timeRange)} Revenue</th>
               <th className="text-right p-2">{getTimeRangeLabel(timeRange)} Profit</th>
+              <th className="text-right p-2">ROI</th>
               <th className="text-center p-2">Status</th>
             </tr>
           </thead>
@@ -93,6 +95,9 @@ const SummaryTable = ({ data, title, timeRange }: {
                 <td className="text-right p-2">{formatDollar(row.spend)}</td>
                 <td className="text-right p-2">{formatDollar(row.revenue)}</td>
                 <td className="text-right p-2">{formatDollar(row.profit)}</td>
+                <td className="text-right p-2">
+                  {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
+                </td>
                 <td className="text-center p-2">
                   {row.profit > 3000 ? '🟢' : row.profit > 1000 ? '🟡' : row.profit > 0 ? '🟠' : '🔴'}
                 </td>
@@ -375,6 +380,8 @@ export const BuyerDashboard = ({
       });
   }, [filteredData, timeRange, data.tableData]);
 
+  const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-6">
@@ -398,7 +405,7 @@ export const BuyerDashboard = ({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
           title={`${getTimeRangeLabel(timeRange)} Spend`}
           value={metrics.spend}
@@ -414,6 +421,7 @@ export const BuyerDashboard = ({
           value={metrics.profit}
           icon={<PieChart className="h-6 w-6" />}
         />
+        <ROIWidget roi={roi} />
       </div>
 
       <DailyProfitChart 
