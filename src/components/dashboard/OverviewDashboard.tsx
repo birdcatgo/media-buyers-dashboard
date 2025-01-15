@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { DashboardData } from '@/types/dashboard';
 import {
   Table,
@@ -20,6 +20,8 @@ interface TrendData {
   yesterdayProfit: number;
   avgDailyRoas: number;
   yesterdayRoas: number;
+  avgDailyRoi: number;
+  yesterdayRoi: number;
   trend: number;
   date: string | Date;
 }
@@ -67,7 +69,7 @@ const isDateInRange = (testDate: Date | null, startDate: Date, endDate: Date) =>
 
 // Move calculateMetrics outside the useMemo
 const calculateMetrics = (rows: any[]) => {
-  if (!rows || !rows.length) return { profit: 0, spend: 0, revenue: 0, roas: 0 };
+  if (!rows || !rows.length) return { profit: 0, spend: 0, revenue: 0, roas: 0, roi: 0 };
   
   const metrics = rows.reduce((acc, row) => ({
     profit: acc.profit + (row.profit || 0),
@@ -76,7 +78,8 @@ const calculateMetrics = (rows: any[]) => {
   }), { profit: 0, spend: 0, revenue: 0 });
 
   const roas = metrics.spend > 0 ? metrics.revenue / metrics.spend : 0;
-  return { ...metrics, roas };
+  const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
+  return { ...metrics, roas, roi };
 };
 
 // Add this helper function at the top
@@ -117,6 +120,134 @@ const calculateTrend = (weekData: any[], yesterdayData: any[]) => {
   return avgDailyProfit !== 0 
     ? ((yesterdayProfit - avgDailyProfit) / Math.abs(avgDailyProfit)) * 100 
     : 100;
+};
+
+// Add this type for our highlight items
+interface HighlightItem {
+  type: 'scale' | 'pause' | 'warning';
+  title: string;
+  description: string;
+  metrics: {
+    label: string;
+    value: string;
+    trend?: 'up' | 'down';
+  }[];
+}
+
+// Add this component for individual highlight cards
+const HighlightCard = ({ item }: { item: HighlightItem }) => {
+  const bgColor = {
+    scale: 'bg-green-50 border-green-200',
+    pause: 'bg-red-50 border-red-200',
+    warning: 'bg-yellow-50 border-yellow-200'
+  }[item.type];
+
+  const iconColor = {
+    scale: 'text-green-600',
+    pause: 'text-red-600',
+    warning: 'text-yellow-600'
+  }[item.type];
+
+  const Icon = {
+    scale: TrendingUp,
+    pause: TrendingDown,
+    warning: AlertTriangle
+  }[item.type];
+
+  return (
+    <div className={`rounded-lg border p-4 ${bgColor}`}>
+      <div className="flex items-center gap-3 mb-3">
+        <Icon className={`h-5 w-5 ${iconColor}`} />
+        <h3 className="font-semibold text-gray-900">{item.title}</h3>
+      </div>
+      <p className="text-sm text-gray-600 mb-3">{item.description}</p>
+      <div className="flex flex-wrap gap-4">
+        {item.metrics.map((metric, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-600">{metric.label}:</span>
+            <span className="text-sm font-bold text-gray-900">{metric.value}</span>
+            {metric.trend && (
+              <span className={metric.trend === 'up' ? 'text-green-600' : 'text-red-600'}>
+                {metric.trend === 'up' ? '↑' : '↓'}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Add this function to analyze trends and generate highlights
+const generateHighlights = (trends: TrendData[]): HighlightItem[] => {
+  const highlights: HighlightItem[] = [];
+
+  // Find offers to scale (high ROI, improving trend)
+  const scaleOffers = trends.filter(trend => 
+    trend.yesterdayRoi > 50 && // Over 50% ROI
+    trend.yesterdayRoi > trend.avgDailyRoi && // Improving ROI
+    trend.yesterdayProfit > 1000 // Significant profit
+  );
+
+  if (scaleOffers.length > 0) {
+    scaleOffers.forEach(offer => {
+      highlights.push({
+        type: 'scale',
+        title: `Scale Opportunity: ${offer.network} - ${offer.offer}`,
+        description: 'Strong performance with improving ROI and significant profit.',
+        metrics: [
+          { label: 'ROI', value: `${offer.yesterdayRoi.toFixed(1)}%`, trend: 'up' },
+          { label: 'Profit', value: formatDollar(offer.yesterdayProfit) },
+          { label: 'ROAS', value: `${offer.yesterdayRoas.toFixed(2)}x` }
+        ]
+      });
+    });
+  }
+
+  // Find offers to pause (negative ROI or significant decline)
+  const pauseOffers = trends.filter(trend =>
+    trend.yesterdayRoi < -20 || // Negative ROI threshold
+    (trend.yesterdayRoi < trend.avgDailyRoi * 0.5 && trend.yesterdayProfit < 0) // Significant decline
+  );
+
+  if (pauseOffers.length > 0) {
+    pauseOffers.forEach(offer => {
+      highlights.push({
+        type: 'pause',
+        title: `Consider Pausing: ${offer.network} - ${offer.offer}`,
+        description: 'Significant performance decline or negative ROI.',
+        metrics: [
+          { label: 'ROI', value: `${offer.yesterdayRoi.toFixed(1)}%`, trend: 'down' },
+          { label: 'Loss', value: formatDollar(offer.yesterdayProfit) },
+          { label: 'vs Avg', value: `${((offer.yesterdayRoi - offer.avgDailyRoi)).toFixed(1)}%` }
+        ]
+      });
+    });
+  }
+
+  // Find significant changes (sudden performance shifts)
+  const volatileOffers = trends.filter(trend => {
+    const roiChange = Math.abs(trend.yesterdayRoi - trend.avgDailyRoi);
+    return roiChange > 30 && trend.yesterdayProfit > 500; // 30% ROI swing and meaningful profit
+  });
+
+  if (volatileOffers.length > 0) {
+    volatileOffers.forEach(offer => {
+      const improving = offer.yesterdayRoi > offer.avgDailyRoi;
+      highlights.push({
+        type: 'warning',
+        title: `Significant Change: ${offer.network} - ${offer.offer}`,
+        description: `${improving ? 'Positive' : 'Negative'} performance shift detected.`,
+        metrics: [
+          { label: 'ROI Change', value: `${(offer.yesterdayRoi - offer.avgDailyRoi).toFixed(1)}%`, trend: improving ? 'up' : 'down' },
+          { label: 'Current ROI', value: `${offer.yesterdayRoi.toFixed(1)}%` },
+          { label: 'Profit', value: formatDollar(offer.yesterdayProfit) }
+        ]
+      });
+    });
+  }
+
+  return highlights;
 };
 
 export const OverviewDashboard = ({
@@ -207,16 +338,23 @@ export const OverviewDashboard = ({
     });
 
     const allTrends = Array.from(groups.values())
-      .map(group => ({
-        network: group.network,
-        offer: group.offer,
-        mediaBuyer: group.mediaBuyer,
-        avgDailyProfit: calculateMetrics(group.weekData).profit / 7,
-        yesterdayProfit: calculateMetrics(group.yesterdayData).profit,
-        avgDailyRoas: calculateMetrics(group.weekData).roas,
-        yesterdayRoas: calculateMetrics(group.yesterdayData).roas,
-        trend: calculateTrend(group.weekData, group.yesterdayData)
-      }))
+      .map(group => {
+        const weekMetrics = calculateMetrics(group.weekData);
+        const yesterdayMetrics = calculateMetrics(group.yesterdayData);
+        
+        return {
+          network: group.network,
+          offer: group.offer,
+          mediaBuyer: group.mediaBuyer,
+          avgDailyProfit: weekMetrics.profit / 7,
+          yesterdayProfit: yesterdayMetrics.profit,
+          avgDailyRoas: weekMetrics.roas,
+          yesterdayRoas: yesterdayMetrics.roas,
+          avgDailyRoi: weekMetrics.roi,
+          yesterdayRoi: yesterdayMetrics.roi,
+          trend: calculateTrend(group.weekData, group.yesterdayData)
+        };
+      })
       .sort((a, b) => b.yesterdayProfit - a.yesterdayProfit);
 
     return { buyerTrends: allTrends, offerTrends: [] };
@@ -246,6 +384,8 @@ export const OverviewDashboard = ({
             <TableHead className="text-right font-semibold">Yesterday's Profit</TableHead>
             <TableHead className="text-right font-semibold">7 Day ROAS</TableHead>
             <TableHead className="text-right font-semibold">Yesterday ROAS</TableHead>
+            <TableHead className="text-right font-semibold">7 Day ROI</TableHead>
+            <TableHead className="text-right font-semibold">Yesterday ROI</TableHead>
             <TableHead className="text-right font-semibold">Profit Trend</TableHead>
           </TableRow>
         </TableHeader>
@@ -272,6 +412,12 @@ export const OverviewDashboard = ({
               </TableCell>
               <TableCell className={`text-right font-medium ${trend.yesterdayRoas >= trend.avgDailyRoas ? 'text-green-600' : 'text-red-600'}`}>
                 {trend.yesterdayRoas.toFixed(2)}x
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                {trend.avgDailyRoi.toFixed(1)}%
+              </TableCell>
+              <TableCell className={`text-right font-medium ${trend.yesterdayRoi >= trend.avgDailyRoi ? 'text-green-600' : 'text-red-600'}`}>
+                {trend.yesterdayRoi.toFixed(1)}%
               </TableCell>
               <TableCell className="text-right">
                 <span className={`flex items-center justify-end font-medium ${trend.trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>

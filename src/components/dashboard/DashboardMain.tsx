@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { useDashboardState } from '@/hooks/useDashboardState';
 import { OfferDashboard } from './OfferDashboard';
 import { OverviewDashboard } from './OverviewDashboard';
+import { HighlightsDashboard } from './HighlightsDashboard';
 
 const DashboardMain: React.FC = () => {
   const { 
@@ -24,6 +25,14 @@ const DashboardMain: React.FC = () => {
   const mediaBuyers = ['Mike', 'Asheesh', 'Dave', 'Zel', 'Daniel', 'Alex'];
 
   const [currentTab, setCurrentTab] = useState('overview');
+
+  const tabs = [
+    { value: "overview", label: "Overview" },
+    { value: "highlights", label: "Highlights" },
+    { value: "offers", label: "Offers" },
+    { value: "monthly", label: "Monthly" },
+    { value: "raw", label: "Raw Data" }
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -42,6 +51,12 @@ const DashboardMain: React.FC = () => {
                   className="flex-1 px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
                 >
                   Overview
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="highlights"
+                  className="flex-1 px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
+                >
+                  Highlights
                 </TabsTrigger>
                 <TabsTrigger 
                   value="yesterday"
@@ -115,6 +130,10 @@ const DashboardMain: React.FC = () => {
                 buyer={selectedBuyer}
                 data={data}
               />
+            </TabsContent>
+
+            <TabsContent value="highlights">
+              <HighlightsDashboard data={data} />
             </TabsContent>
           </Tabs>
         </Card>
