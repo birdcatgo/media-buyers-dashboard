@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { DashboardData } from '@/types/dashboard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDollar } from '@/utils/formatters';
+import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
 
 type TimeRange = 'yesterday' | '7d' | '14d' | 'mtd' | '30d' | '60d' | 'lastMonth' | 'ytd';
 
@@ -64,55 +65,70 @@ const validateDates = (data: any[]) => {
 
 // Add getDateRange helper function
 const getDateRange = (timeRange: TimeRange, latestDate: Date): { start: Date, end: Date } => {
-  let end = latestDate;
+  // Validate input date
+  if (!(latestDate instanceof Date) || isNaN(latestDate.getTime())) {
+    latestDate = new Date();
+  }
+
+  let end = new Date(latestDate);
   let start: Date;
 
   switch (timeRange) {
     case 'yesterday':
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 1);
-      return { start, end: start };
+      end = new Date(start);
+      break;
+    case 'mtd':
+      start = new Date(end.getFullYear(), end.getMonth(), 1);
+      break;
     case '7d':
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 6);
-      return { start, end };
+      break;
     case '14d':
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 13);
-      return { start, end };
-    case 'mtd':
-      start = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
-      return { start, end };
+      break;
     case '30d':
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 29);
-      return { start, end };
+      break;
     case '60d':
       start = new Date(latestDate);
       start.setDate(latestDate.getDate() - 59);
-      return { start, end };
+      break;
     case 'lastMonth':
       start = new Date(latestDate.getFullYear(), latestDate.getMonth() - 1, 1);
       end = new Date(latestDate.getFullYear(), latestDate.getMonth(), 0);
-      return { start, end };
+      break;
     case 'ytd':
       start = new Date(latestDate.getFullYear(), 0, 1);
-      return { start, end };
+      break;
     default:
-      return { start: end, end };
+      start = end;
+      end.setDate(end.getDate() + 1);
   }
+
+  // Set hours to ensure full day coverage
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
 };
 
 // Update getFilteredData function
 const getFilteredData = (data: any[], timeRange: TimeRange) => {
   const latestDate = getLatestDate(data);
+  const { start, end } = getDateRange(timeRange, latestDate);
   
   return data.filter(row => {
     if (typeof row.date !== 'string') return false;
     
     const [month, day, year] = row.date.split('/').map(Number);
     const rowDate = new Date(year, month - 1, day);
-    const { start, end } = getDateRange(timeRange, latestDate);
+    rowDate.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
+    
     return rowDate >= start && rowDate <= end;
   });
 };
@@ -131,6 +147,316 @@ const getLatestDate = (data: any[]): Date => {
 
 // Add type for metric
 type MetricType = 'profit' | 'roi';
+
+// Inside the LineChart component, add a trend line by calculating the linear regression
+const Chart = ({ data, selectedOffers, metricType }: { 
+  data: any[]; 
+  selectedOffers: string[];
+  metricType: 'profit' | 'roi';
+}) => {
+  // Add data validation
+  if (!data?.length) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p>No data available for the selected period</p>
+      </div>
+    );
+  }
+
+  const dataWithTrend = useMemo(() => {
+    const n = data.length;
+    if (n < 2) return data;
+
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumXX = 0;
+
+    data.forEach((point, index) => {
+      const x = index;
+      const y = Number(point.Total) || 0;
+      sumX += x;
+      sumY += y;
+      sumXY += x * y;
+      sumXX += x * x;
+    });
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    return data.map((point, index) => ({
+      ...point,
+      trend: slope * index + intercept
+    }));
+  }, [data]);
+
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart
+        data={dataWithTrend}
+        margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis
+          dataKey="date"
+          angle={-45}
+          textAnchor="end"
+          height={60}
+          interval={0}
+        />
+        <YAxis
+          tickFormatter={(value) => 
+            metricType === 'profit'
+              ? `$${(value / 1000).toFixed(1)}k`
+              : `${value.toFixed(1)}%`
+          }
+          width={80}
+        />
+        <Tooltip
+          formatter={(value: number, name: string) => [
+            metricType === 'profit'
+              ? `$${value.toLocaleString()}`
+              : `${value.toFixed(1)}%`,
+            name === 'trend' ? 'Trend' : name
+          ]}
+          labelFormatter={(label) => `Date: ${label}`}
+        />
+        <Legend />
+        {selectedOffers.length === 0 ? (
+          <>
+            <Line
+              type="monotone"
+              dataKey="Total"
+              name="Daily Total"
+              stroke="#2563eb"
+              strokeWidth={2}
+              dot={{ r: 3, fill: "#2563eb" }}
+              activeDot={{ r: 5, stroke: "#2563eb", strokeWidth: 2 }}
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="trend"
+              name="Trend"
+              stroke="#2563eb"
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              strokeOpacity={0.4}
+              dot={false}
+              isAnimationActive={false}
+            />
+          </>
+        ) : (
+          selectedOffers.map((offer, index) => {
+            const color = `hsl(${(index * 360) / selectedOffers.length}, 70%, 50%)`;
+            return (
+              <React.Fragment key={offer}>
+                <Line
+                  type="monotone"
+                  dataKey={offer}
+                  name={offer}
+                  stroke={color}
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: color }}
+                  activeDot={{ r: 5, stroke: color, strokeWidth: 2 }}
+                  isAnimationActive={false}
+                />
+              </React.Fragment>
+            );
+          })
+        )}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+};
+
+const SummaryTable = ({ data, title, timeRange }: { 
+  data: any[]; 
+  title: string;
+  timeRange: TimeRange;
+}) => {
+  // Calculate trend for each row
+  const getPerformanceTrend = (row: any) => {
+    if (!row.previousPeriodProfit) return 'NC';
+    const change = row.profit - row.previousPeriodProfit;
+    if (Math.abs(change) < 0.01) return 'NC';
+    return change > 0 ? '↑' : '↓';
+  };
+
+  // Updated status indicator based on ROI thresholds
+  const getStatusIndicator = (spend: number, profit: number) => {
+    if (spend <= 0) return '⚪'; // No data
+    const roi = (profit / spend) * 100;
+    if (roi >= 20) return '🟢';      // ROI >= 20%
+    if (roi >= 1) return '🟠';       // ROI between 1-19%
+    return '🔴';                      // ROI < 1%
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left p-2">Offer</th>
+                <th className="text-right p-2">Spend</th>
+                <th className="text-right p-2">Revenue</th>
+                <th className="text-right p-2">Profit</th>
+                <th className="text-right p-2">ROI</th>
+                <th className="text-center p-2">Status</th>
+                <th className="text-center p-2">Trend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, idx) => {
+                const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
+                const status = (() => {
+                  if (row.spend <= 0) return '⚪';
+                  if (roi >= 20) return '🟢';
+                  if (roi >= 1) return '🟠';
+                  return '🔴';
+                })();
+                const trend = (() => {
+                  if (!row.previousPeriodProfit) return 'NC';
+                  const change = row.profit - row.previousPeriodProfit;
+                  if (Math.abs(change) < 0.01) return 'NC';
+                  return change > 0 ? '↑' : '↓';
+                })();
+
+                return (
+                  <tr key={idx} className="border-b">
+                    <td className="p-2">{row.name}</td>
+                    <td className="text-right p-2">{formatDollar(row.spend)}</td>
+                    <td className="text-right p-2">{formatDollar(row.revenue)}</td>
+                    <td className="text-right p-2">{formatDollar(row.profit)}</td>
+                    <td className="text-right p-2">
+                      {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
+                    </td>
+                    <td className="text-center p-2">{status}</td>
+                    <td className="text-center p-2 font-bold">{trend}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const getTimeRangeLabel = (timeRange: TimeRange): string => {
+  switch (timeRange) {
+    case 'yesterday': return "Yesterday's";
+    case '7d': return 'Last 7 Days';
+    case '14d': return 'Last 14 Days';
+    case 'mtd': return 'MTD';
+    case '30d': return 'Last 30 Days';
+    case '60d': return 'Last 60 Days';
+    case 'lastMonth': return 'Last Month';
+    case 'ytd': return 'YTD';
+    default: return '';
+  }
+};
+
+interface OfferPerformance {
+  name: string;
+  profit: number;
+  spend: number;
+  revenue: number;
+  previousPeriodProfit: number;
+}
+
+// Add this new component after the existing Chart component
+const TotalProfitChart = ({ 
+  data, 
+  selectedOffers,
+  networkOffers,
+  setSelectedOffers
+}: { 
+  data: any[];
+  selectedOffers: string[];
+  networkOffers: string[];
+  setSelectedOffers: (offers: string[]) => void;
+}) => {
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Select
+          value={selectedOffers.join(',') || 'all'}
+          onValueChange={(value) => setSelectedOffers(value === 'all' ? [] : value.split(','))}
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Select offers" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Offers</SelectItem>
+            {networkOffers.map(offer => (
+              <SelectItem key={offer} value={offer}>
+                {offer}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <ResponsiveContainer width="100%" height={500}>
+        <LineChart
+          data={data}
+          margin={{ top: 20, right: 30, left: 80, bottom: 60 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis
+            dataKey="date"
+            angle={-45}
+            textAnchor="end"
+            height={100}
+            interval={0}
+          />
+          <YAxis
+            tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
+            width={80}
+          />
+          <Tooltip
+            formatter={(value: number) => [`$${value.toLocaleString()}`, 'Daily Profit']}
+            labelFormatter={(label) => `Date: ${label}`}
+          />
+          <Legend />
+          {selectedOffers.length === 0 ? (
+            <Line
+              type="monotone"
+              dataKey="Total"
+              name="Total Profit"
+              stroke="#2563eb"
+              strokeWidth={2}
+              dot={{ r: 4, fill: "#2563eb" }}
+              isAnimationActive={false}
+            />
+          ) : (
+            selectedOffers.map((offer, index) => {
+              const color = `hsl(${(index * 360) / selectedOffers.length}, 70%, 50%)`;
+              return (
+                <Line
+                  key={offer}
+                  type="monotone"
+                  dataKey={offer}
+                  name={offer}
+                  stroke={color}
+                  strokeWidth={2}
+                  dot={{ r: 4, fill: color }}
+                  isAnimationActive={false}
+                />
+              );
+            })
+          )}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
 
 export const OfferDashboard = ({
   data
@@ -160,80 +486,127 @@ export const OfferDashboard = ({
 
   // Update combinedData to handle both profit and ROI
   const combinedData = useMemo(() => {
-    const filteredTableData = getFilteredData(data.tableData, timeRange);
-    const dailyTotals = new Map<string, Record<string, { profit: number; spend: number }>>();
-    
-    filteredTableData.forEach(row => {
-      let key = `${row.network} - ${row.offer}`;
+    const filteredData = getFilteredData(data.tableData, timeRange);
+    const dailyData = new Map();
+
+    // Get date range
+    const { start, end } = getDateRange(timeRange, getLatestDate(data.tableData));
+
+    // Initialize all dates in range
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const key = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}`;
+      dailyData.set(key, {
+        date: key,
+        Total: 0,
+        ...networkOffers.reduce((acc, offer) => ({ ...acc, [offer]: 0 }), {})
+      });
+    }
+
+    // Populate data
+    filteredData.forEach(row => {
+      const entry = dailyData.get(row.date);
+      if (!entry) return;
+
+      let offerKey = `${row.network} - ${row.offer}`;
       if (row.network === 'Suited' && row.offer === 'ACA') {
-        key = 'ACA - ACA';
+        offerKey = 'ACA - ACA';
       }
 
-      if (!dailyTotals.has(row.date)) {
-        dailyTotals.set(row.date, {});
+      const value = metricType === 'profit' ? row.profit : (row.adSpend > 0 ? (row.profit / row.adSpend) * 100 : 0);
+
+      entry.Total = (Number(entry.Total) || 0) + value;
+      if (offerKey in entry) {
+        entry[offerKey] = (Number(entry[offerKey]) || 0) + value;
       }
-      const dayData = dailyTotals.get(row.date)!;
-      if (!dayData[key]) {
-        dayData[key] = { profit: 0, spend: 0 };
-      }
-      dayData[key].profit += row.profit;
-      dayData[key].spend += row.adSpend;
     });
 
-    return Array.from(dailyTotals.entries())
-      .map(([date, data]) => {
-        const dayData: any = { date };
-        
-        if (selectedOffers.length === 0) {
-          // Calculate daily totals
-          let totalProfit = 0;
-          let totalSpend = 0;
-          Object.values(data).forEach(({ profit, spend }) => {
-            totalProfit += profit;
-            totalSpend += spend;
-          });
-          dayData.Total = metricType === 'profit' 
-            ? totalProfit 
-            : (totalSpend > 0 ? (totalProfit / totalSpend) * 100 : 0);
-        } else {
-          // Show selected offers
-          selectedOffers.forEach(offer => {
-            if (data[offer]) {
-              dayData[offer] = metricType === 'profit'
-                ? data[offer].profit
-                : (data[offer].spend > 0 ? (data[offer].profit / data[offer].spend) * 100 : 0);
-            }
-          });
-        }
-        return dayData;
-      })
+    const result = Array.from(dailyData.values())
       .sort((a, b) => {
-        const [aMonth, aDay, aYear] = a.date.split('/').map(Number);
-        const [bMonth, bDay, bYear] = b.date.split('/').map(Number);
-        const dateA = new Date(aYear, aMonth - 1, aDay);
-        const dateB = new Date(bYear, bMonth - 1, bDay);
-        return dateA.getTime() - dateB.getTime();
+        const [aMonth, aDay, aYear] = (a.date as string).split('/').map(Number);
+        const [bMonth, bDay, bYear] = (b.date as string).split('/').map(Number);
+        return new Date(aYear, aMonth - 1, aDay).getTime() - 
+               new Date(bYear, bMonth - 1, bDay).getTime();
       });
-  }, [data.tableData, timeRange, selectedOffers, metricType]);
+
+    console.log('Combined Data:', {
+      totalDays: result.length,
+      dateRange: { start: result[0]?.date, end: result[result.length - 1]?.date },
+      sampleValues: result.slice(0, 3).map(d => ({ date: d.date, Total: d.Total }))
+    });
+
+    return result;
+  }, [data.tableData, timeRange, networkOffers, metricType]);
+
+  // Add more detailed debug logging
+  console.log('Chart Data Debug:', {
+    sampleData: combinedData.slice(0, 3).map(d => ({
+      date: d.date,
+      Total: d.Total,
+      sampleOffers: Object.entries(d)
+        .filter(([key]) => key !== 'date' && key !== 'Total')
+        .slice(0, 3)
+    })),
+    totalDays: combinedData.length,
+    offers: networkOffers,
+    timeRange,
+    hasData: combinedData.some(d => d.Total !== 0)
+  });
 
   // Add this at the top of the component, after the useMemos
   const sortedOfferPerformance = useMemo(() => {
     const filteredTableData = getFilteredData(data.tableData, timeRange);
-    const metrics = new Map<string, { spend: number; revenue: number; profit: number }>();
+    const latestDate = getLatestDate(data.tableData);
+    
+    // Calculate previous period
+    const { start: currentStart, end: currentEnd } = getDateRange(timeRange, latestDate);
+    const periodLength = currentEnd.getTime() - currentStart.getTime();
+    const previousStart = new Date(currentStart.getTime() - periodLength);
+    const previousEnd = new Date(currentStart.getTime() - 1);
 
+    const metrics = new Map<string, { 
+      spend: number; 
+      revenue: number; 
+      profit: number;
+      previousPeriodProfit: number;
+    }>();
+
+    // Process current period
     filteredTableData.forEach(row => {
       let key = `${row.network} - ${row.offer}`;
-      // Special handling for Suited - ACA
       if (row.network === 'Suited' && row.offer === 'ACA') {
         key = 'ACA - ACA';
       }
 
-      const current = metrics.get(key) || { spend: 0, revenue: 0, profit: 0 };
+      const current = metrics.get(key) || { 
+        spend: 0, 
+        revenue: 0, 
+        profit: 0,
+        previousPeriodProfit: 0
+      };
+      
       metrics.set(key, {
         spend: current.spend + row.adSpend,
         revenue: current.revenue + row.adRev,
-        profit: current.profit + row.profit
+        profit: current.profit + row.profit,
+        previousPeriodProfit: current.previousPeriodProfit
       });
+    });
+
+    // Process previous period
+    data.tableData.forEach(row => {
+      const [month, day, year] = row.date.split('/').map(Number);
+      const rowDate = new Date(year, month - 1, day);
+      if (rowDate >= previousStart && rowDate <= previousEnd) {
+        let key = `${row.network} - ${row.offer}`;
+        if (row.network === 'Suited' && row.offer === 'ACA') {
+          key = 'ACA - ACA';
+        }
+        
+        const current = metrics.get(key);
+        if (current) {
+          current.previousPeriodProfit += row.profit;
+        }
+      }
     });
 
     return Array.from(metrics.entries())
@@ -242,6 +615,56 @@ export const OfferDashboard = ({
         ...values
       }))
       .sort((a, b) => b.profit - a.profit);
+  }, [data.tableData, timeRange]);
+
+  // Update the data preparation for the table to include previous period data
+  const { offerPerformance } = useMemo(() => {
+    const latestDate = getLatestDate(data.tableData);
+    const timeRangeData = getFilteredData(data.tableData, timeRange);
+    
+    // Calculate previous period
+    const { start: currentStart, end: currentEnd } = getDateRange(timeRange, latestDate);
+    const periodLength = currentEnd.getTime() - currentStart.getTime();
+    const previousStart = new Date(currentStart.getTime() - periodLength);
+    const previousEnd = new Date(currentStart.getTime() - 1);
+
+    // Get previous period data
+    const previousPeriodData = data.tableData.filter(row => {
+      const [month, day, year] = row.date.split('/').map(Number);
+      const rowDate = new Date(year, month - 1, day);
+      return rowDate >= previousStart && rowDate <= previousEnd;
+    });
+
+    // Calculate performance including previous period
+    const byOffer = timeRangeData.reduce((acc, row) => {
+      const key = `${row.network} - ${row.offer}`;
+      if (!acc[key]) {
+        acc[key] = {
+          name: key,
+          profit: 0,
+          spend: 0,
+          revenue: 0,
+          previousPeriodProfit: 0
+        };
+      }
+      acc[key].profit += row.profit;
+      acc[key].spend += row.adSpend;
+      acc[key].revenue += row.adRev;
+      return acc;
+    }, {} as Record<string, any>);
+
+    // Add previous period data
+    previousPeriodData.forEach(row => {
+      const key = `${row.network} - ${row.offer}`;
+      if (byOffer[key]) {
+        byOffer[key].previousPeriodProfit = (byOffer[key].previousPeriodProfit || 0) + row.profit;
+      }
+    });
+
+    return {
+      offerPerformance: (Object.values(byOffer) as OfferPerformance[])
+        .sort((a, b) => b.profit - a.profit)
+    };
   }, [data.tableData, timeRange]);
 
   return (
@@ -270,8 +693,7 @@ export const OfferDashboard = ({
           <CardTitle>All Offers Summary</CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Performance Table */}
-          <div className="mb-12 overflow-x-auto">
+          <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b">
@@ -281,138 +703,66 @@ export const OfferDashboard = ({
                   <th className="text-right p-2">Profit</th>
                   <th className="text-right p-2">ROI</th>
                   <th className="text-center p-2">Status</th>
+                  <th className="text-center p-2">Trend</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedOfferPerformance.map(({ name, spend, revenue, profit }) => (
-                  <tr key={name} className="border-b">
-                    <td className="p-2">{name}</td>
-                    <td className="text-right p-2">{formatDollar(spend)}</td>
-                    <td className="text-right p-2">{formatDollar(revenue)}</td>
-                    <td className="text-right p-2">{formatDollar(profit)}</td>
-                    <td className="text-right p-2">
-                      {spend > 0 ? `${((profit / spend) * 100).toFixed(1)}%` : 'N/A'}
-                    </td>
-                    <td className="text-center p-2">
-                      {profit > 3000 ? '🟢' : profit > 1000 ? '🟡' : profit > 0 ? '🟠' : '🔴'}
-                    </td>
-                  </tr>
-                ))}
+                {sortedOfferPerformance.map((row, idx) => {
+                  const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
+                  const status = getROIStatus(roi, row.spend);
+                  
+                  const trend = row.previousPeriodProfit 
+                    ? ((row.profit - row.previousPeriodProfit) / Math.abs(row.previousPeriodProfit)) * 100
+                    : 0;
+
+                  return (
+                    <tr key={idx} className="border-b">
+                      <td className="p-2">{row.name}</td>
+                      <td className="text-right p-2">{formatDollar(row.spend)}</td>
+                      <td className="text-right p-2">{formatDollar(row.revenue)}</td>
+                      <td className="text-right p-2">{formatDollar(row.profit)}</td>
+                      <td className="text-right p-2">
+                        {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
+                      </td>
+                      <td className="text-center p-2">
+                        <span title={status.label}>{status.icon}</span>
+                      </td>
+                      <td className="text-center p-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <span className={getTrendColor(trend)}>
+                            {getTrendIcon(trend)}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {trend !== 0 ? `${Math.abs(trend).toFixed(1)}%` : 'NC'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Chart Title */}
-          <h3 className="text-lg font-semibold mb-6 text-center">
-            Daily {metricType === 'profit' ? 'Profit' : 'ROI'} by Offer
-          </h3>
+      {/* Chart Title */}
+      <h3 className="text-lg font-semibold mb-6 text-center">
+        Daily {metricType === 'profit' ? 'Profit' : 'ROI'} by Offer
+      </h3>
 
-          {/* Chart Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Daily {metricType === 'profit' ? 'Profit' : 'ROI'} by Offer</CardTitle>
-                <div className="flex gap-4">
-                  <Select
-                    value={metricType}
-                    onValueChange={(value: MetricType) => setMetricType(value)}
-                  >
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue placeholder="Select metric" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="profit">Profit</SelectItem>
-                      <SelectItem value="roi">ROI</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={selectedOffers.join(',') || 'all'}
-                    onValueChange={(value) => setSelectedOffers(value === 'all' ? [] : value.split(','))}
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Select offers" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Daily Total</SelectItem>
-                      {networkOffers.map(offer => (
-                        <SelectItem key={offer} value={offer}>
-                          {offer}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[500px] flex">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart 
-                    data={combinedData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="date" 
-                      tick={{ fontSize: 12 }}
-                      interval={0}
-                      angle={-45}
-                      textAnchor="end"
-                      height={60}
-                    />
-                    <YAxis 
-                      tickFormatter={(value) => 
-                        metricType === 'profit'
-                          ? `$${(value / 1000).toFixed(1)}k`
-                          : `${value.toFixed(1)}%`
-                      }
-                      width={80}
-                    />
-                    <Tooltip 
-                      formatter={(value: number, name: string) => [
-                        metricType === 'profit'
-                          ? `$${value.toLocaleString()}`
-                          : `${value.toFixed(1)}%`,
-                        name
-                      ]}
-                      labelFormatter={(label) => `Date: ${label}`}
-                      wrapperStyle={{ fontSize: '12px' }}
-                    />
-                    <Legend 
-                      verticalAlign="bottom"
-                      height={48}
-                      wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }}
-                    />
-                    <ReferenceLine y={0} stroke="#666" />
-                    {selectedOffers.length === 0 ? (
-                      <Line
-                        type="monotone"
-                        dataKey="Total"
-                        name="Daily Total"
-                        stroke="#2563eb"
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                        activeDot={{ r: 6 }}
-                      />
-                    ) : (
-                      selectedOffers.map((offer, index) => (
-                        <Line
-                          key={offer}
-                          type="monotone"
-                          dataKey={offer}
-                          name={offer}
-                          stroke={`hsl(${(index * 360) / selectedOffers.length}, 70%, 50%)`}
-                          strokeWidth={2}
-                          dot={{ r: 4 }}
-                          activeDot={{ r: 6 }}
-                        />
-                      ))
-                    )}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Chart Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Daily Profit by Offer</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TotalProfitChart 
+            data={combinedData} 
+            selectedOffers={selectedOffers}
+            networkOffers={networkOffers}
+            setSelectedOffers={setSelectedOffers}
+          />
         </CardContent>
       </Card>
     </div>

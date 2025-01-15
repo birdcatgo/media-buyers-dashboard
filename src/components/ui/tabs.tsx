@@ -4,6 +4,7 @@ import * as React from "react"
 import * as TabsPrimitive from "@radix-ui/react-tabs"
  
 import { cn } from "../../lib/utils"
+import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
  
 const Tabs = TabsPrimitive.Root
  

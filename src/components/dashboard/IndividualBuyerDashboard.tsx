@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatDollar } from '@/utils/formatters';
 import { normalizeNetworkOffer } from '@/utils/dataUtils';
 import { ROIWidget } from './ROIWidget';
+import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
 
 type TimeRange = 'yesterday' | '7d' | '14d' | 'mtd' | '30d' | '60d' | 'lastMonth' | 'ytd';
 
@@ -89,20 +90,39 @@ const SummaryTable = ({ data, title, timeRange }: {
             </tr>
           </thead>
           <tbody>
-            {data.map((row, idx) => (
-              <tr key={idx} className="border-b">
-                <td className="p-2">{row.name}</td>
-                <td className="text-right p-2">{formatDollar(row.spend)}</td>
-                <td className="text-right p-2">{formatDollar(row.revenue)}</td>
-                <td className="text-right p-2">{formatDollar(row.profit)}</td>
-                <td className="text-right p-2">
-                  {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
-                </td>
-                <td className="text-center p-2">
-                  {row.profit > 3000 ? '🟢' : row.profit > 1000 ? '🟡' : row.profit > 0 ? '🟠' : '🔴'}
-                </td>
-              </tr>
-            ))}
+            {data.map((row, idx) => {
+              const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
+              const status = getROIStatus(roi, row.spend);
+              
+              const trend = row.previousPeriodProfit 
+                ? ((row.profit - row.previousPeriodProfit) / Math.abs(row.previousPeriodProfit)) * 100
+                : 0;
+
+              return (
+                <tr key={idx} className="border-b">
+                  <td className="p-2">{row.name}</td>
+                  <td className="text-right p-2">{formatDollar(row.spend)}</td>
+                  <td className="text-right p-2">{formatDollar(row.revenue)}</td>
+                  <td className="text-right p-2">{formatDollar(row.profit)}</td>
+                  <td className="text-right p-2">
+                    {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
+                  </td>
+                  <td className="text-center p-2">
+                    <span title={status.label}>{status.icon}</span>
+                  </td>
+                  <td className="text-center p-2">
+                    <div className="flex items-center justify-center gap-1">
+                      <span className={getTrendColor(trend)}>
+                        {getTrendIcon(trend)}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {trend !== 0 ? `${Math.abs(trend).toFixed(1)}%` : 'NC'}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

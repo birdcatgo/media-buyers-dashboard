@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { DashboardData } from '@/types/dashboard';
 import { calculateMetrics } from '@/utils/highlightUtils';
 import { HighlightItem } from '@/components/dashboard/HighlightCard';
+import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
 
 export const useHighlights = (data: DashboardData) => {
   const { buyerHighlights } = useMemo(() => {
@@ -21,4 +22,20 @@ export const useHighlights = (data: DashboardData) => {
   }, [data]);
 
   return { buyerHighlights };
-}; 
+};
+
+// Update the ROI status calculation in the hook
+const getHighlightStatus = (roi: number, spend: number) => {
+  const status = getROIStatus(roi, spend);
+  return {
+    icon: status.icon,
+    color: status.color,
+    label: status.label
+  };
+};
+
+// Update trend calculation
+const getTrendIndicator = (trend: number) => ({
+  icon: getTrendIcon(trend),
+  color: getTrendColor(trend)
+}); 
