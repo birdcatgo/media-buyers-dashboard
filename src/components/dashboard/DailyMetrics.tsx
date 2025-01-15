@@ -5,7 +5,7 @@ import { DashboardData } from '@/types/dashboard';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatDollar } from '@/utils/formatters';
 import { ROIWidget } from './ROIWidget';
-import { getROIStatus } from '@/utils/statusIndicators';
+import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
 
 export const DailyMetrics = ({
   buyer,
