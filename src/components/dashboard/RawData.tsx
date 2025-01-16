@@ -243,49 +243,36 @@ export const RawData = ({
   const filteredData = useMemo(() => {
     let filtered = [...data.tableData];
     
-    // Format latest date as MM/DD/YYYY for comparison
-    const formattedLatestDate = `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`;
-    
+    // Apply date range filter
+    const { start, end } = getDateRange(timeRange, latestDate);
     filtered = filtered.filter(row => {
-      if (typeof row.date !== 'string') return false;
-      
       const [month, day, year] = row.date.split('/').map(Number);
       const rowDate = new Date(year, month - 1, day);
-      
-      switch (timeRange) {
-        case 'yesterday': {
-          return row.date === formattedLatestDate;
-        }
-        case '7d': {
-          // Show last 7 days from latest date
-          const sevenDaysAgo = new Date(latestDate);
-          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-          return rowDate >= sevenDaysAgo && rowDate <= latestDate;
-        }
-        case 'mtd': {
-          // Show current month up to latest date
-          const startOfMonth = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
-          return rowDate >= startOfMonth && rowDate <= latestDate;
-        }
-        case 'custom': {
-          const [customYear, customMonth, customDay] = customDateString.split('-').map(Number);
-          const customDate = new Date(customYear, customMonth - 1, customDay);
-          return rowDate.getTime() === customDate.getTime();
-        }
-        default:
-          return true;
-      }
+      return rowDate >= start && rowDate <= end;
     });
 
-    // Apply other filters
-    if (buyer !== 'all') {
-      filtered = filtered.filter(row => row.mediaBuyer === buyer);
+    // Apply media buyer filter
+    if (filters.mediaBuyer !== 'all') {
+      filtered = filtered.filter(row => row.mediaBuyer === filters.mediaBuyer);
     }
-    if (offer !== 'all') filtered = filtered.filter(row => row.offer === offer);
-    if (network !== 'all') filtered = filtered.filter(row => row.network === network);
+
+    // Apply ad account filter
+    if (filters.adAccount !== 'all') {
+      filtered = filtered.filter(row => row.adAccount === filters.adAccount);
+    }
+
+    // Apply offer filter
+    if (filters.offer !== 'all') {
+      filtered = filtered.filter(row => row.offer === filters.offer);
+    }
+
+    // Apply network filter
+    if (filters.network !== 'all') {
+      filtered = filtered.filter(row => row.network === filters.network);
+    }
 
     return filtered;
-  }, [data.tableData, buyer, offer, network, timeRange, customDateString, latestDate]);
+  }, [data.tableData, timeRange, latestDate, filters]);
 
   const sortedData = useMemo(() => {
     if (!sortConfig) return filteredData;
