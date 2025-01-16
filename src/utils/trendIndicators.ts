@@ -23,7 +23,7 @@ export const getTrendIndicator = (current: number, previous: number): TrendIndic
     return {
       type: 'positive',
       icon: '🚀',
-      label: 'Growing',
+      label: 'Improving',
       color: 'text-emerald-500'
     };
   }
