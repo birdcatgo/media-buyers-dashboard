@@ -20,7 +20,7 @@ import { DashboardData } from '@/types/dashboard';
 import { formatDollar } from '@/utils/formatters';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ROIWidget } from './ROIWidget';
-import { getSimplifiedTrend } from '@/utils/trendIndicators';
+import { getTrendIndicator } from '@/utils/trendIndicators';
 
 const getStatusEmoji = (profit: number) => {
   if (profit > 3000) return '🟢';
@@ -409,7 +409,7 @@ export const MonthlyMetrics = ({
       name: key,
       currentProfit: data.profit,
       previousProfit: data.previousPeriodProfit,
-      trend: getSimplifiedTrend(data.profit, data.previousPeriodProfit)
+      trend: getTrendIndicator(data.profit, data.previousPeriodProfit)
     })));
 
     return Object.values(byOffer).sort((a, b) => b.profit - a.profit);
@@ -489,7 +489,7 @@ const SummaryTable = ({ data, title }: { data: any[]; title: string }) => {
   // Add previous period comparison
   const dataWithTrends = data.map(row => ({
     ...row,
-    trend: getSimplifiedTrend(row.profit, row.previousPeriodProfit || 0)
+    trend: getTrendIndicator(row.profit, row.previousPeriodProfit || 0)
   }));
 
   return (
@@ -524,11 +524,7 @@ const SummaryTable = ({ data, title }: { data: any[]; title: string }) => {
                   <td className="text-center p-2">{getStatusEmoji(row.profit)}</td>
                   <td className="text-center p-2">
                     <div className="flex items-center justify-center gap-1">
-                      <span className={
-                        row.trend.type === 'positive' ? 'text-green-500' :
-                        row.trend.type === 'negative' ? 'text-red-500' :
-                        'text-gray-500'
-                      }>
+                      <span className={row.trend.color}>
                         {row.trend.icon}
                       </span>
                       <span className="text-xs text-gray-500">

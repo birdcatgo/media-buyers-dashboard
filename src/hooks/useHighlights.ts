@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { DashboardData, TableData, HighlightItem } from '@/types/dashboard';
 import { calculateMetrics } from '@/utils/highlightUtils';
 import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
-import { getSimplifiedTrend } from '@/utils/trendIndicators';
+import { getTrendIndicator } from '@/utils/trendIndicators';
 
 type Trend = {
   type: string;
@@ -36,7 +36,7 @@ export const useHighlights = (data: DashboardData) => {
       const status = getROIStatus(roi, metrics.spend);
       
       // Calculate trend
-      const trendObj = getSimplifiedTrend(metrics.profit, metrics.previousProfit);
+      const trendObj = getTrendIndicator(metrics.profit, metrics.previousProfit);
 
       // Create highlight item
       const highlight: HighlightItem = {

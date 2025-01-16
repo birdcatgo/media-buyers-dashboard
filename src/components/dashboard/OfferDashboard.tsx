@@ -5,7 +5,7 @@ import { DashboardData } from '@/types/dashboard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDollar } from '@/utils/formatters';
 import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
-import { getSimplifiedTrend } from '@/utils/trendIndicators';
+import { getTrendIndicator } from '@/utils/trendIndicators';
 
 type TimeRange = 'yesterday' | '7d' | '14d' | 'mtd' | '30d' | '60d' | 'lastMonth' | 'ytd';
 
@@ -376,12 +376,7 @@ const SummaryTable = ({ data, title, timeRange }: {
                   if (roi >= 1) return '🟠';
                   return '🔴';
                 })();
-                const trend = (() => {
-                  if (!row.previousPeriodProfit) return 'NC';
-                  const change = row.profit - row.previousPeriodProfit;
-                  if (Math.abs(change) < 0.01) return 'NC';
-                  return change > 0 ? '↑' : '↓';
-                })();
+                const trend = getTrendIndicator(row.profit, row.previousPeriodProfit);
 
                 return (
                   <tr key={idx} className="border-b">
@@ -393,7 +388,7 @@ const SummaryTable = ({ data, title, timeRange }: {
                       {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
                     </td>
                     <td className="text-center p-2">{status}</td>
-                    <td className="text-center p-2 font-bold">{trend}</td>
+                    <td className="text-center p-2 font-bold">{trend.icon}</td>
                   </tr>
                 );
               })}
@@ -766,7 +761,7 @@ export const OfferDashboard = ({
                 {sortedOfferPerformance.map((row, idx) => {
                   const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
                   const status = getROIStatus(roi, row.spend);
-                  const trend = getSimplifiedTrend(row.profit, row.previousPeriodProfit);
+                  const trend = getTrendIndicator(row.profit, row.previousPeriodProfit);
 
                   return (
                     <tr key={idx} className="border-b">

@@ -6,7 +6,7 @@ import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveCo
 import { formatDollar } from '@/utils/formatters';
 import { ROIWidget } from './ROIWidget';
 import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
-import { getSimplifiedTrend } from '@/utils/trendIndicators';
+import { getTrendIndicator } from '@/utils/trendIndicators';
 
 type Trend = {
   type: string;
@@ -182,7 +182,7 @@ export const DailyMetrics = ({
       .sort((a, b) => b.profit - a.profit)
       .map(buyer => ({
         ...buyer,
-        trend: getSimplifiedTrend(buyer.profit, buyer.previousProfit)
+        trend: getTrendIndicator(buyer.profit, buyer.previousProfit)
       }));
   }, [filteredData, data.tableData, latestDate, buyer, formattedDate]);
 
@@ -251,14 +251,14 @@ export const DailyMetrics = ({
       key,
       current: data.profit,
       previous: data.previousProfit,
-      trend: getSimplifiedTrend(data.profit, data.previousProfit)
+      trend: getTrendIndicator(data.profit, data.previousProfit)
     })));
 
     return Object.values(byNetworkOffer)
       .sort((a, b) => b.profit - a.profit)
       .map(offer => ({
         ...offer,
-        trend: getSimplifiedTrend(offer.profit, offer.previousProfit)
+        trend: getTrendIndicator(offer.profit, offer.previousProfit)
       }));
   }, [filteredData, data.tableData, latestDate, buyer, formattedDate]);
 

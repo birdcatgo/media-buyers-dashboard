@@ -1,52 +1,88 @@
-export const getSimplifiedTrend = (current: number, previous: number) => {
-  // If no previous data or both are zero, return neutral trend
-  if (!previous && !current) {
-    return {
-      type: 'neutral',
-      icon: '–',
-      label: 'NC'
-    };
-  }
+interface TrendIndicator {
+  type: 'positive' | 'negative' | 'neutral';
+  icon: string;
+  label: string;
+  color: string;
+}
 
-  // If only previous is zero/null, compare with zero
+export const getTrendIndicator = (current: number, previous: number): TrendIndicator => {
   if (!previous || previous === 0) {
     return {
-      type: current > 0 ? 'positive' : current < 0 ? 'negative' : 'neutral',
-      icon: current > 0 ? '↑' : current < 0 ? '↓' : '–',
-      label: current === 0 ? 'NC' : 'New'
-    };
-  }
-
-  // Calculate the change
-  const change = current - previous;
-  
-  // If change is minimal, return neutral
-  if (Math.abs(change) < 0.01) {
-    return {
       type: 'neutral',
-      icon: '–',
-      label: 'NC'
+      icon: '🆕',
+      label: 'New',
+      color: 'text-gray-500'
     };
   }
 
-  // Special handling for improvement from negative to positive
-  if (previous < 0 && current > 0) {
+  const percentChange = ((current - previous) / Math.abs(previous)) * 100;
+  const absoluteChange = current - previous;
+
+  // Significant improvement
+  if (percentChange >= 50 && current > 1000) {
     return {
       type: 'positive',
-      icon: '↑',
-      label: 'Improved'
+      icon: '🚀',
+      label: 'Growing',
+      color: 'text-emerald-500'
     };
   }
 
-  // Calculate percentage change
-  const percentChange = (change / Math.abs(previous)) * 100;
+  // Steady high performer
+  if (percentChange >= 0 && percentChange < 10 && current > 3000) {
+    return {
+      type: 'positive',
+      icon: '⭐',
+      label: 'Consistent',
+      color: 'text-blue-500'
+    };
+  }
 
-  // Determine if trend is positive (either increased positive or decreased negative)
-  const isPositive = (previous > 0 && change > 0) || (previous < 0 && change < 0);
+  // Growing steadily
+  if (percentChange >= 10 && percentChange < 50) {
+    return {
+      type: 'positive',
+      icon: '📈',
+      label: 'Growing',
+      color: 'text-green-500'
+    };
+  }
 
+  // Slight decline but still profitable
+  if (percentChange < 0 && percentChange > -20 && current > 0) {
+    return {
+      type: 'neutral',
+      icon: '📊',
+      label: 'Variable',
+      color: 'text-yellow-500'
+    };
+  }
+
+  // Significant decline but still profitable
+  if (percentChange <= -20 && current > 0) {
+    return {
+      type: 'negative',
+      icon: '⚠️',
+      label: 'Declining',
+      color: 'text-orange-500'
+    };
+  }
+
+  // Critical decline or loss
+  if (current < 0 || percentChange <= -50) {
+    return {
+      type: 'negative',
+      icon: '💀',
+      label: 'Critical',
+      color: 'text-red-500'
+    };
+  }
+
+  // Default case - stable
   return {
-    type: isPositive ? 'positive' : 'negative',
-    icon: isPositive ? '↑' : '↓',
-    label: `${Math.abs(percentChange).toFixed(1)}%`
+    type: 'neutral',
+    icon: '➡️',
+    label: 'Stable',
+    color: 'text-gray-500'
   };
 }; 
