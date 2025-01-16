@@ -9,6 +9,15 @@ import { formatDollar } from '@/utils/formatters';
 import { normalizeNetworkOffer } from '@/utils/dataUtils';
 import { ROIWidget } from './ROIWidget';
 import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
+import { getTrendIndicator } from '@/utils/trendIndicators';
+
+// Add this helper function
+const getStatusEmoji = (profit: number) => {
+  if (profit > 3000) return '🟢';
+  if (profit > 1000) return '🟡';
+  if (profit > 0) return '🟠';
+  return '🔴';
+};
 
 type TimeRange = 'yesterday' | '7d' | '14d' | 'mtd' | '30d' | '60d' | 'lastMonth' | 'ytd';
 
@@ -71,65 +80,190 @@ const SummaryTable = ({ data, title, timeRange }: {
   data: any[]; 
   title: string;
   timeRange: TimeRange;
-}) => (
-  <Card>
-    <CardHeader className="pb-2 pt-4">
-      <CardTitle className="text-base">{title}</CardTitle>
-    </CardHeader>
-    <CardContent className="pt-0">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b">
-              <th className="text-left py-1.5 px-2 whitespace-nowrap">Name</th>
-              <th className="text-right py-1.5 px-2 whitespace-nowrap">Spend</th>
-              <th className="text-right py-1.5 px-2 whitespace-nowrap">Revenue</th>
-              <th className="text-right py-1.5 px-2 whitespace-nowrap">Profit</th>
-              <th className="text-right py-1.5 px-2 whitespace-nowrap">ROI</th>
-              <th className="text-center py-1.5 px-2 whitespace-nowrap">Status</th>
-              <th className="text-center py-1.5 px-2 whitespace-nowrap">Trend</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm">
-            {data.map((row, idx) => {
-              const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
-              const status = getROIStatus(roi, row.spend);
-              
-              return (
-                <tr key={idx} className="border-b">
-                  <td className="py-1.5 px-2 whitespace-nowrap">{row.name}</td>
-                  <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(row.spend)}</td>
-                  <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(row.revenue)}</td>
-                  <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(row.profit)}</td>
-                  <td className="text-right py-1.5 px-2 whitespace-nowrap">
-                    {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
-                  </td>
-                  <td className="text-center py-1.5 px-2">
-                    <span title={status.label}>{status.icon}</span>
-                  </td>
-                  <td className="text-center py-1.5 px-2">
-                    <div className="flex items-center justify-center gap-1">
-                      <span className={
-                        row.trend.type === 'positive' ? 'text-green-500' :
-                        row.trend.type === 'negative' ? 'text-red-500' :
-                        'text-gray-500'
-                      }>
-                        {row.trend.icon}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {row.trend.label}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </CardContent>
-  </Card>
-);
+}) => {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  // First, normalize the data to ensure consistent structure
+  const normalizedData = (data || []).map(row => ({
+    name: row.name || '',
+    profit: row.profit || 0,
+    spend: row.spend || 0,
+    revenue: row.revenue || 0,
+    previousPeriodProfit: row.previousPeriodProfit || 0,
+    trend: null
+  }));
+
+  // Initialize processedData without ACA - ACA
+  const processedData: Record<string, any> = {};
+
+  // Then process the data
+  normalizedData.forEach(row => {
+    if (row.name === 'Suited - ACA') {
+      // Create ACA - ACA entry if it doesn't exist
+      if (!processedData['ACA - ACA']) {
+        processedData['ACA - ACA'] = {
+          name: 'ACA - ACA',
+          profit: 0,
+          spend: 0,
+          revenue: 0,
+          previousPeriodProfit: 0,
+          breakdown: [],
+          trend: null
+        };
+      }
+
+      // Update ACA - ACA totals
+      const acaEntry = processedData['ACA - ACA'];
+      acaEntry.spend += row.spend;
+      acaEntry.revenue += row.revenue;
+      acaEntry.profit += row.profit;
+      acaEntry.previousPeriodProfit += row.previousPeriodProfit;
+      
+      // Add to breakdown
+      if (Array.isArray(acaEntry.breakdown)) {
+        acaEntry.breakdown.push({
+          ...row,
+          trend: getTrendIndicator(row.profit, row.previousPeriodProfit)
+        });
+      }
+    } else {
+      processedData[row.name] = {
+        ...row,
+        trend: getTrendIndicator(row.profit, row.previousPeriodProfit)
+      };
+    }
+  });
+
+  // Calculate trend for ACA - ACA only if it exists and has data
+  if (processedData['ACA - ACA']?.profit !== undefined) {
+    processedData['ACA - ACA'].trend = getTrendIndicator(
+      processedData['ACA - ACA'].profit,
+      processedData['ACA - ACA'].previousPeriodProfit
+    );
+  }
+
+  // Remove empty ACA - ACA entry if no data was added
+  if (processedData['ACA - ACA']?.breakdown?.length === 0) {
+    delete processedData['ACA - ACA'];
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 pt-4">
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-1.5 px-2 whitespace-nowrap">Name</th>
+                <th className="text-right py-1.5 px-2 whitespace-nowrap">Spend</th>
+                <th className="text-right py-1.5 px-2 whitespace-nowrap">Revenue</th>
+                <th className="text-right py-1.5 px-2 whitespace-nowrap">Profit</th>
+                <th className="text-right py-1.5 px-2 whitespace-nowrap">ROI</th>
+                <th className="text-center py-1.5 px-2 whitespace-nowrap">Status</th>
+                <th className="text-center py-1.5 px-2 whitespace-nowrap">Trend</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {Object.values(processedData).map((row: any) => (
+                <React.Fragment key={row.name}>
+                  <tr className="border-b">
+                    <td className="py-1.5 px-2 whitespace-nowrap">
+                      <div className="flex items-center">
+                        {row.name === 'ACA - ACA' && row.breakdown?.length > 0 && (
+                          <button
+                            onClick={() => {
+                              const newExpanded = new Set(expandedRows);
+                              if (expandedRows.has(row.name)) {
+                                newExpanded.delete(row.name);
+                              } else {
+                                newExpanded.add(row.name);
+                              }
+                              setExpandedRows(newExpanded);
+                            }}
+                            className="mr-2 text-gray-500 hover:text-gray-700"
+                          >
+                            {expandedRows.has(row.name) ? '▼' : '▶'}
+                          </button>
+                        )}
+                        {row.name}
+                      </div>
+                    </td>
+                    <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(row.spend)}</td>
+                    <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(row.revenue)}</td>
+                    <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(row.profit)}</td>
+                    <td className="text-right py-1.5 px-2 whitespace-nowrap">
+                      {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
+                    </td>
+                    <td className="text-center py-1.5 px-2">
+                      {getStatusEmoji(row.profit)}
+                    </td>
+                    <td className="text-center py-1.5 px-2">
+                      <div className="flex items-center justify-center gap-1">
+                        {row.trend ? (
+                          <>
+                            <span className={
+                              row.trend.type === 'positive' ? 'text-green-500' :
+                              row.trend.type === 'negative' ? 'text-red-500' :
+                              'text-gray-500'
+                            }>
+                              {row.trend.icon}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {row.trend.label}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-gray-500">-</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedRows.has(row.name) && row.breakdown?.map((subRow: any) => (
+                    <tr key={subRow.name} className="bg-gray-50">
+                      <td className="py-1.5 px-2 pl-8 whitespace-nowrap">{subRow.name}</td>
+                      <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(subRow.spend)}</td>
+                      <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(subRow.revenue)}</td>
+                      <td className="text-right py-1.5 px-2 whitespace-nowrap">{formatDollar(subRow.profit)}</td>
+                      <td className="text-right py-1.5 px-2 whitespace-nowrap">
+                        {subRow.spend > 0 ? `${((subRow.profit / subRow.spend) * 100).toFixed(1)}%` : 'N/A'}
+                      </td>
+                      <td className="text-center py-1.5 px-2">
+                        {getStatusEmoji(subRow.profit)}
+                      </td>
+                      <td className="text-center py-1.5 px-2">
+                        <div className="flex items-center justify-center gap-1">
+                          {subRow.trend ? (
+                            <>
+                              <span className={
+                                subRow.trend.type === 'positive' ? 'text-green-500' :
+                                subRow.trend.type === 'negative' ? 'text-red-500' :
+                                'text-gray-500'
+                              }>
+                                {subRow.trend.icon}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {subRow.trend.label}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-gray-500">-</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 const DailyProfitChart = ({ data, timeRange }: { 
   data: any[]; 
@@ -470,7 +604,7 @@ export const BuyerDashboard = ({
         trend: getSimplifiedTrend(offer.profit, offer.previousPeriodProfit)
       });
       
-      offer.trend = getSimplifiedTrend(offer.profit, offer.previousPeriodProfit);
+      offer.trend = getTrendIndicator(offer.profit, offer.previousPeriodProfit);
     });
 
     // Calculate account performance with trends
@@ -500,7 +634,7 @@ export const BuyerDashboard = ({
     // Calculate trends for accounts
     Object.values(byAccount).forEach(account => {
       const trend = getSimplifiedTrend(account.profit, account.previousPeriodProfit);
-      account.trend = trend;
+      account.trend = getTrendIndicator(account.profit, account.previousPeriodProfit);
     });
 
     return {
@@ -626,8 +760,23 @@ export const BuyerDashboard = ({
           buyer={buyer}
           data={{
             ...data,
-            // Pre-filter the tableData for this buyer
-            tableData: data.tableData.filter(row => row.mediaBuyer === buyer)
+            tableData: data.tableData
+              .filter(row => {
+                // Always filter by buyer
+                if (row.mediaBuyer !== buyer) return false;
+
+                // Apply network filter if specified
+                if (network !== 'all' && row.network !== network) return false;
+
+                // Apply offer filter if specified
+                if (offer !== 'all' && row.offer !== offer) return false;
+
+                // Apply time range filter
+                const [month, day, year] = row.date.split('/').map(Number);
+                const rowDate = new Date(year, month - 1, day);
+                const { start, end } = getDateRange(timeRange, getLatestDate(data.tableData));
+                return rowDate >= start && rowDate <= end;
+              })
           }}
           offer={offer}
           network={network}

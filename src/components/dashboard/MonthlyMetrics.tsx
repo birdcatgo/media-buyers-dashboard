@@ -486,11 +486,46 @@ export const MonthlyMetrics = ({
 };
 
 const SummaryTable = ({ data, title }: { data: any[]; title: string }) => {
-  // Add previous period comparison
-  const dataWithTrends = data.map(row => ({
-    ...row,
-    trend: getTrendIndicator(row.profit, row.previousPeriodProfit || 0)
-  }));
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  // Group Suited - ACA under ACA - ACA and calculate trends
+  const processedData = data.reduce((acc, row) => {
+    if (row.name === 'Suited - ACA') {
+      // Add to ACA - ACA breakdown
+      if (!acc['ACA - ACA']) {
+        acc['ACA - ACA'] = {
+          name: 'ACA - ACA',
+          spend: 0,
+          revenue: 0,
+          profit: 0,
+          previousPeriodProfit: 0,
+          breakdown: []
+        };
+      }
+      acc['ACA - ACA'].spend += row.spend;
+      acc['ACA - ACA'].revenue += row.revenue;
+      acc['ACA - ACA'].profit += row.profit;
+      acc['ACA - ACA'].previousPeriodProfit += row.previousPeriodProfit;
+      acc['ACA - ACA'].breakdown.push({
+        ...row,
+        trend: getTrendIndicator(row.profit, row.previousPeriodProfit)
+      });
+    } else {
+      acc[row.name] = {
+        ...row,
+        trend: getTrendIndicator(row.profit, row.previousPeriodProfit)
+      };
+    }
+    return acc;
+  }, {});
+
+  // Calculate trend for ACA - ACA after aggregation
+  if (processedData['ACA - ACA']) {
+    processedData['ACA - ACA'].trend = getTrendIndicator(
+      processedData['ACA - ACA'].profit,
+      processedData['ACA - ACA'].previousPeriodProfit
+    );
+  }
 
   return (
     <Card>
@@ -512,27 +547,71 @@ const SummaryTable = ({ data, title }: { data: any[]; title: string }) => {
               </tr>
             </thead>
             <tbody>
-              {dataWithTrends.map((row, idx) => (
-                <tr key={idx} className="border-b">
-                  <td className="p-2">{row.name}</td>
-                  <td className="text-right p-2">{formatDollar(row.spend)}</td>
-                  <td className="text-right p-2">{formatDollar(row.revenue)}</td>
-                  <td className="text-right p-2">{formatDollar(row.profit)}</td>
-                  <td className="text-right p-2">
-                    {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
-                  </td>
-                  <td className="text-center p-2">{getStatusEmoji(row.profit)}</td>
-                  <td className="text-center p-2">
-                    <div className="flex items-center justify-center gap-1">
-                      <span className={row.trend.color}>
-                        {row.trend.icon}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {row.trend.label}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
+              {Object.values(processedData).map((row: any) => (
+                <React.Fragment key={row.name}>
+                  <tr className="border-b">
+                    <td className="p-2">
+                      <div className="flex items-center">
+                        {row.name === 'ACA - ACA' && row.breakdown?.length > 0 && (
+                          <button
+                            onClick={() => {
+                              const newExpanded = new Set(expandedRows);
+                              if (expandedRows.has(row.name)) {
+                                newExpanded.delete(row.name);
+                              } else {
+                                newExpanded.add(row.name);
+                              }
+                              setExpandedRows(newExpanded);
+                            }}
+                            className="mr-2 text-gray-500 hover:text-gray-700"
+                          >
+                            {expandedRows.has(row.name) ? '▼' : '▶'}
+                          </button>
+                        )}
+                        {row.name}
+                      </div>
+                    </td>
+                    <td className="text-right p-2">{formatDollar(row.spend)}</td>
+                    <td className="text-right p-2">{formatDollar(row.revenue)}</td>
+                    <td className="text-right p-2">{formatDollar(row.profit)}</td>
+                    <td className="text-right p-2">
+                      {row.spend > 0 ? `${((row.profit / row.spend) * 100).toFixed(1)}%` : 'N/A'}
+                    </td>
+                    <td className="text-center p-2">{getStatusEmoji(row.profit)}</td>
+                    <td className="text-center p-2">
+                      <div className="flex items-center justify-center gap-1">
+                        <span className={row.trend.color}>
+                          {row.trend.icon}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {row.trend.label}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedRows.has(row.name) && row.breakdown?.map((subRow: any) => (
+                    <tr key={subRow.name} className="bg-gray-50">
+                      <td className="p-2 pl-8">{subRow.name}</td>
+                      <td className="text-right p-2">{formatDollar(subRow.spend)}</td>
+                      <td className="text-right p-2">{formatDollar(subRow.revenue)}</td>
+                      <td className="text-right p-2">{formatDollar(subRow.profit)}</td>
+                      <td className="text-right p-2">
+                        {subRow.spend > 0 ? `${((subRow.profit / subRow.spend) * 100).toFixed(1)}%` : 'N/A'}
+                      </td>
+                      <td className="text-center p-2">{getStatusEmoji(subRow.profit)}</td>
+                      <td className="text-center p-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <span className={subRow.trend.color}>
+                            {subRow.trend.icon}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {subRow.trend.label}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
