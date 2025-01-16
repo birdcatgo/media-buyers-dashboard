@@ -1,9 +1,20 @@
 import { useMemo } from 'react';
-import { DashboardData, TableData } from '@/types/dashboard';
+import { DashboardData, TableData, HighlightItem } from '@/types/dashboard';
 import { calculateMetrics } from '@/utils/highlightUtils';
-import { HighlightItem } from '@/components/dashboard/HighlightCard';
 import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
 import { getSimplifiedTrend } from '@/utils/trendIndicators';
+
+type Trend = {
+  type: string;
+  icon: string;
+  label: string;
+};
+
+interface Highlight {
+  title: string;
+  value: number;
+  trend: Trend;
+}
 
 export const useHighlights = (data: DashboardData) => {
   const tableData = Array.isArray(data.tableData) ? data.tableData : [];
@@ -25,12 +36,11 @@ export const useHighlights = (data: DashboardData) => {
       const status = getROIStatus(roi, metrics.spend);
       
       // Calculate trend
-      const trend = metrics.previousProfit 
-        ? ((metrics.profit - metrics.previousProfit) / Math.abs(metrics.previousProfit)) * 100
-        : 0;
+      const trendObj = getSimplifiedTrend(metrics.profit, metrics.previousProfit);
 
       // Create highlight item
       const highlight: HighlightItem = {
+        type: 'performing',
         title: `${row.network} - ${row.offer}`,
         metrics: {
           spend: metrics.spend,
@@ -43,7 +53,11 @@ export const useHighlights = (data: DashboardData) => {
           color: status.color,
           label: status.label
         },
-        trend: getSimplifiedTrend(metrics.profit, metrics.previousProfit)
+        trend: {
+          icon: getTrendIcon(trendObj),
+          color: getTrendColor(trendObj),
+          value: metrics.profit - metrics.previousProfit
+        }
       };
 
       buyerHighlights[buyer].push(highlight);

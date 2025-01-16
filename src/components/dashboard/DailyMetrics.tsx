@@ -8,6 +8,12 @@ import { ROIWidget } from './ROIWidget';
 import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
 import { getSimplifiedTrend } from '@/utils/trendIndicators';
 
+type Trend = {
+  type: string;
+  icon: string;
+  label: string;
+};
+
 export const DailyMetrics = ({
   buyer,
   data
@@ -116,6 +122,12 @@ export const DailyMetrics = ({
     previousDate.setDate(previousDate.getDate() - 1);
     const formattedPreviousDate = `${(previousDate.getMonth() + 1).toString().padStart(2, '0')}/${previousDate.getDate().toString().padStart(2, '0')}/${previousDate.getFullYear()}`;
 
+    // Debug log for dates
+    console.log('Daily Trend Dates:', {
+      current: formattedDate,
+      previous: formattedPreviousDate
+    });
+
     // Get previous day's performance
     const previousData = data.tableData.filter(row => 
       row.date === formattedPreviousDate && 
@@ -136,12 +148,13 @@ export const DailyMetrics = ({
       acc[row.mediaBuyer].spend += row.adSpend;
       acc[row.mediaBuyer].revenue += row.adRev;
       return acc;
-    }, {} as Record<string, { 
-      name: string; 
-      profit: number; 
-      spend: number; 
+    }, {} as Record<string, {
+      name: string;
+      profit: number;
+      spend: number;
       revenue: number;
       previousProfit: number;
+      trend?: Trend;
     }>);
 
     // Add previous day's data
@@ -151,27 +164,45 @@ export const DailyMetrics = ({
       }
     });
 
+    // Debug log for Leadnomic data
+    const leadnomicData = {
+      current: filteredData.filter(row => row.network === 'Leadnomic'),
+      previous: previousData.filter(row => row.network === 'Leadnomic')
+    };
+    console.log('Leadnomic Data:', {
+      dates: { current: formattedDate, previous: formattedPreviousDate },
+      data: leadnomicData,
+      profits: {
+        current: leadnomicData.current.reduce((sum, row) => sum + row.profit, 0),
+        previous: leadnomicData.previous.reduce((sum, row) => sum + row.profit, 0)
+      }
+    });
+
     return Object.values(byBuyer)
       .sort((a, b) => b.profit - a.profit)
       .map(buyer => ({
         ...buyer,
         trend: getSimplifiedTrend(buyer.profit, buyer.previousProfit)
       }));
-  }, [filteredData, data.tableData, latestDate, buyer]);
+  }, [filteredData, data.tableData, latestDate, buyer, formattedDate]);
 
   const networkOfferPerformance = useMemo(() => {
-    // Get previous month's data for comparison
-    const currentMonth = latestDate.getMonth();
-    const currentYear = latestDate.getFullYear();
-    
-    // Get all data from previous month
-    const previousMonthData = data.tableData.filter(row => {
-      const [month, , year] = row.date.split('/').map(Number);
-      const rowDate = new Date(year, month - 1);
-      const isPreviousMonth = currentMonth === 0 
-        ? month === 12 && year === currentYear - 1  // December of previous year
-        : month === currentMonth && year === currentYear;  // Previous month same year
-      return isPreviousMonth;
+    // Get previous day's data (not previous month)
+    const previousDate = new Date(latestDate);
+    previousDate.setDate(previousDate.getDate() - 1);
+    const formattedPreviousDate = `${(previousDate.getMonth() + 1).toString().padStart(2, '0')}/${previousDate.getDate().toString().padStart(2, '0')}/${previousDate.getFullYear()}`;
+
+    // Get previous day's performance
+    const previousData = data.tableData.filter(row => 
+      row.date === formattedPreviousDate && 
+      (buyer === 'all' || row.mediaBuyer === buyer)
+    );
+
+    // Debug log for comparison data
+    console.log('Network Offer Comparison:', {
+      dates: { current: formattedDate, previous: formattedPreviousDate },
+      currentData: filteredData,
+      previousData: previousData
     });
 
     const byNetworkOffer = filteredData.reduce((acc, row) => {
@@ -194,17 +225,18 @@ export const DailyMetrics = ({
       acc[key].spend += row.adSpend;
       acc[key].revenue += row.adRev;
       return acc;
-    }, {} as Record<string, { 
+    }, {} as Record<string, {
       network: string;
       offer: string;
       profit: number;
       spend: number;
       revenue: number;
       previousProfit: number;
+      trend?: Trend;
     }>);
 
-    // Add previous month's data
-    previousMonthData.forEach(row => {
+    // Add previous day's data
+    previousData.forEach(row => {
       const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
       const offer = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.offer;
       const key = `${network} - ${offer}`;
@@ -214,13 +246,21 @@ export const DailyMetrics = ({
       }
     });
 
+    // Debug log for processed data
+    console.log('Network Offer Trends:', Object.entries(byNetworkOffer).map(([key, data]) => ({
+      key,
+      current: data.profit,
+      previous: data.previousProfit,
+      trend: getSimplifiedTrend(data.profit, data.previousProfit)
+    })));
+
     return Object.values(byNetworkOffer)
       .sort((a, b) => b.profit - a.profit)
       .map(offer => ({
         ...offer,
         trend: getSimplifiedTrend(offer.profit, offer.previousProfit)
       }));
-  }, [filteredData, data.tableData, latestDate]);
+  }, [filteredData, data.tableData, latestDate, buyer, formattedDate]);
 
   const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
 

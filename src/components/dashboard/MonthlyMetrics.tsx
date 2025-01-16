@@ -224,30 +224,31 @@ export const MonthlyMetrics = ({
   buyer: string;
   data: DashboardData;
 }) => {
+  // Get the latest date from data at component level
+  const latestDate = useMemo(() => {
+    return new Date(Math.max(...data.tableData.map(row => {
+      const [month, day, year] = row.date.split('/').map(Number);
+      return new Date(year, month - 1, day).getTime();
+    })));
+  }, [data.tableData]);
+
   // Filter data by buyer/offer/network and MTD
   const filteredData = useMemo(() => {
     let filtered = [...data.tableData];
 
-    // Filter for January 2025
+    // Filter for current month only
     filtered = filtered.filter(row => {
       try {
         if (typeof row.date !== 'string') return false;
         
-        // Parse date assuming MM/DD/YYYY format
         const [month, day, year] = row.date.split('/').map(Number);
-        
-        // Get the latest date in the dataset for MTD
-        const latestDate = filtered.reduce((latest, r) => {
-          const [m, d, y] = r.date.split('/').map(Number);
-          const currentDate = new Date(y, m - 1, d);
-          return currentDate > latest ? currentDate : latest;
-        }, new Date(0));
-
-        // Create date objects for comparison
         const rowDate = new Date(year, month - 1, day);
-        const startDate = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
+        
+        // Only include current month data
+        const isCurrentMonth = rowDate.getMonth() === latestDate.getMonth() && 
+                             rowDate.getFullYear() === latestDate.getFullYear();
 
-        return rowDate >= startDate && rowDate <= latestDate;
+        return isCurrentMonth;
       } catch (e) {
         console.error('Error parsing date:', row.date);
         return false;
@@ -259,28 +260,36 @@ export const MonthlyMetrics = ({
       filtered = filtered.filter((row) => row.mediaBuyer === buyer);
     }
 
-    // Add duplicate checking
-    const dateCount = filtered.reduce((acc, row) => {
-      acc[row.date] = (acc[row.date] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    // Log date distribution
-    console.log('MTD Date Distribution:', {
-      totalRows: filtered.length,
-      byDate: Object.entries(dateCount).sort().map(([date, count]) => ({
-        date,
-        count,
-        rows: filtered.filter(row => row.date === date).map(row => ({
-          mediaBuyer: row.mediaBuyer,
-          offer: row.offer,
-          network: row.network,
-          profit: row.profit
-        }))
-      }))
-    });
-
     return filtered;
+  }, [data.tableData, buyer, latestDate]);
+
+  // Separate data including previous month for trends
+  const trendData = useMemo(() => {
+    let allData = [...data.tableData];
+    const latestDate = new Date(Math.max(...allData.map(row => {
+      const [month, day, year] = row.date.split('/').map(Number);
+      return new Date(year, month - 1, day).getTime();
+    })));
+    
+    const currentMonth = latestDate.getMonth();
+    const currentYear = latestDate.getFullYear();
+    const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const previousYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    // Filter for both months but keep track of which is which
+    return allData.filter(row => {
+      if (buyer !== 'all' && row.mediaBuyer !== buyer) return false;
+
+      const [month, day, year] = row.date.split('/').map(Number);
+      const rowDate = new Date(year, month - 1, day);
+      
+      const isCurrentMonth = rowDate.getMonth() === currentMonth && 
+                           rowDate.getFullYear() === currentYear;
+      const isPreviousMonth = rowDate.getMonth() === previousMonth && 
+                            rowDate.getFullYear() === previousYear;
+
+      return isCurrentMonth || isPreviousMonth;
+    });
   }, [data.tableData, buyer]);
 
   // Add debug logging
@@ -355,6 +364,7 @@ export const MonthlyMetrics = ({
 
   // Offer performance array for bar chart
   const offerPerformance = useMemo(() => {
+    // First get current month data for display
     const byOffer = filteredData.reduce((acc, row) => {
       const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
       const offer = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.offer;
@@ -369,17 +379,45 @@ export const MonthlyMetrics = ({
           previousPeriodProfit: 0
         };
       }
+
       acc[key].profit += row.profit;
       acc[key].spend += row.adSpend;
       acc[key].revenue += row.adRev;
       return acc;
     }, {} as Record<string, any>);
 
+    // Then calculate previous month profits for trends
+    trendData.forEach(row => {
+      const [month, day, year] = row.date.split('/').map(Number);
+      const rowDate = new Date(year, month - 1, day);
+      
+      // Only process previous month data
+      if (rowDate.getMonth() === latestDate.getMonth() - 1 || 
+          (latestDate.getMonth() === 0 && rowDate.getMonth() === 11)) {
+        const network = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.network;
+        const offer = (row.network === 'Suited' && row.offer === 'ACA') ? 'ACA' : row.offer;
+        const key = `${network} - ${offer}`;
+        
+        if (byOffer[key]) {
+          byOffer[key].previousPeriodProfit += row.profit;
+        }
+      }
+    });
+
+    // Debug log
+    console.log('Offer Performance:', Object.entries(byOffer).map(([key, data]) => ({
+      name: key,
+      currentProfit: data.profit,
+      previousProfit: data.previousPeriodProfit,
+      trend: getSimplifiedTrend(data.profit, data.previousPeriodProfit)
+    })));
+
     return Object.values(byOffer).sort((a, b) => b.profit - a.profit);
-  }, [filteredData]);
+  }, [filteredData, trendData, latestDate]);
 
   // Buyer performance array for table or bar chart
   const buyerPerformance = useMemo(() => {
+    // First get current month data
     const byBuyer = filteredData.reduce((acc, row) => {
       if (!acc[row.mediaBuyer]) {
         acc[row.mediaBuyer] = {
@@ -396,8 +434,21 @@ export const MonthlyMetrics = ({
       return acc;
     }, {} as Record<string, any>);
 
+    // Then add previous month data for trends
+    trendData.forEach(row => {
+      const [month, day, year] = row.date.split('/').map(Number);
+      const rowDate = new Date(year, month - 1, day);
+      
+      if (rowDate.getMonth() === latestDate.getMonth() - 1 || 
+          (latestDate.getMonth() === 0 && rowDate.getMonth() === 11)) {
+        if (byBuyer[row.mediaBuyer]) {
+          byBuyer[row.mediaBuyer].previousPeriodProfit += row.profit;
+        }
+      }
+    });
+
     return Object.values(byBuyer);
-  }, [filteredData]);
+  }, [filteredData, trendData, latestDate]);
 
   const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
 

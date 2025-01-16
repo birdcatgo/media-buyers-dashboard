@@ -1,36 +1,10 @@
 import React, { useState } from 'react';
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "../ui/card";
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { HighlightItem, WeekDataPoint } from "../../types/dashboard";
 
-export interface HighlightItem {
-  type: 'performing' | 'potential' | 'declining-profitable' | 'declining-critical' | 'inconsistent';
-  title: string;
-  description: string;
-  metrics: {
-    label: string;
-    value: string;
-    trend?: 'up' | 'down';
-  }[];
-  weekData: {
-    date: string;
-    profit: number;
-    adSpend: number;
-    adRev: number;
-  }[];
-}
-
-interface WeekDataPoint {
-  date: string;
-  profit: number;
-  adSpend: number;
-  adRev: number;
-}
-
-export const HighlightCard = ({ item, weekData }: { 
-  item: HighlightItem; 
-  weekData: WeekDataPoint[];
-}) => {
+export const HighlightCard = ({ item }: { item: HighlightItem }) => {
   const [showChart, setShowChart] = useState(true);
   const [metric, setMetric] = useState<'profit' | 'roi'>('profit');
 
@@ -71,7 +45,7 @@ export const HighlightCard = ({ item, weekData }: {
       <CardContent className="pt-6">
         {/* Copy the entire JSX from HighlightsDashboard's HighlightCard */}
 
-        {showChart && weekData.length > 0 && (
+        {showChart && (item.weekData?.length ?? 0) > 0 && (
           <div className="mt-4">
             <div className="flex justify-between items-center mb-2">
               <h4 className="text-sm font-medium">7 Day Trend</h4>
@@ -87,7 +61,7 @@ export const HighlightCard = ({ item, weekData }: {
             <div className="h-[200px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
-                  data={weekData}
+                  data={item.weekData ?? []}
                   margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
                 >
                   {/* ... rest of chart components ... */}
