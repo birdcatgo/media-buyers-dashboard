@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DollarSign, TrendingUp, PieChart } from 'lucide-react';
@@ -10,6 +10,7 @@ import { normalizeNetworkOffer } from '@/utils/dataUtils';
 import { ROIWidget } from './ROIWidget';
 import { getROIStatus, getTrendIcon, getTrendColor } from '@/utils/statusIndicators';
 import { getTrendIndicator } from '@/utils/trendIndicators';
+import { MediaBuyerProfitChart } from './MediaBuyerDashboard';
 
 // Add this helper function
 const getStatusEmoji = (profit: number) => {
@@ -265,49 +266,81 @@ const SummaryTable = ({ data, title, timeRange }: {
   );
 };
 
-const DailyProfitChart = ({ data, timeRange }: { 
-  data: any[]; 
+interface DailyProfitChartProps {
+  data: any[];
   timeRange: TimeRange;
-}) => (
-  <Card>
-    <CardHeader>
-      <CardTitle>Daily Profit</CardTitle>
-    </CardHeader>
-    <CardContent>
-      <div className="h-80">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart 
-            data={data}
-            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis 
-              dataKey="date"
-              angle={-45}
-              textAnchor="end"
-              height={60}
-            />
-            <YAxis 
-              tickFormatter={(value) => formatDollar(value)}
-              width={100}
-            />
-            <Tooltip 
-              formatter={(value: number) => [formatDollar(value), 'Profit']}
-              labelFormatter={(label) => `Date: ${label}`}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="profit" 
-              stroke="#22c55e" 
-              dot={false}
-              strokeWidth={2}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </CardContent>
-  </Card>
-);
+  dateRange: TimeRange;
+}
+
+const DailyProfitChart = ({ data, timeRange, dateRange }: DailyProfitChartProps) => {
+  // Process the data to aggregate daily profits
+  const chartData = useMemo(() => {
+    const dailyProfits = new Map();
+    
+    // Filter and aggregate data by date
+    data.forEach(row => {
+      const date = row.date;
+      if (!dailyProfits.has(date)) {
+        dailyProfits.set(date, {
+          date,
+          profit: row.profit
+        });
+      } else {
+        dailyProfits.get(date).profit += row.profit;
+      }
+    });
+
+    // Convert to array and sort by date
+    return Array.from(dailyProfits.values())
+      .sort((a, b) => {
+        const [aMonth, aDay, aYear] = a.date.split('/').map(Number);
+        const [bMonth, bDay, bYear] = b.date.split('/').map(Number);
+        return new Date(aYear, aMonth - 1, aDay).getTime() - 
+               new Date(bYear, bMonth - 1, bDay).getTime();
+      });
+  }, [data]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Daily Profit</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart 
+              data={chartData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="date"
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis 
+                tickFormatter={(value) => formatDollar(value)}
+                width={100}
+              />
+              <Tooltip 
+                formatter={(value: number) => [formatDollar(value), 'Profit']}
+                labelFormatter={(label) => `Date: ${label}`}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="profit" 
+                stroke="#22c55e" 
+                dot={false}
+                strokeWidth={2}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 interface PerformanceItem {
   profit: number;
@@ -416,6 +449,7 @@ export const BuyerDashboard = ({
 }: Props) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('mtd');
   const [customDate, setCustomDate] = useState(new Date('2025-01-06'));
+  const [selectedOffers, setSelectedOffers] = useState<string[]>([]);
 
   const filteredData = useMemo(() => {
     const latestDate = getLatestDate(data.tableData);
@@ -649,37 +683,21 @@ export const BuyerDashboard = ({
     // Process each row
     filteredData.forEach(row => {
       try {
-        const [month, day, year] = row.date.split('/').map(Number);
         const formattedDate = row.date;
+        const offerKey = `${row.network} - ${row.offer}`;
         
-        const currentProfit = dailyProfits.get(formattedDate)?.profit || 0;
-        dailyProfits.set(formattedDate, {
-          date: formattedDate,
-          profit: currentProfit + Number(row.profit)
-        });
+        if (!dailyProfits.has(formattedDate)) {
+          dailyProfits.set(formattedDate, {
+            date: formattedDate,
+            [offerKey]: row.profit  // Set initial profit for this offer
+          });
+        } else {
+          const entry = dailyProfits.get(formattedDate);
+          entry[offerKey] = (entry[offerKey] || 0) + row.profit;  // Add to existing profit
+        }
       } catch (e) {
         console.error('Error processing row:', row, e);
       }
-    });
-
-    // Fill in missing dates based on selected time range
-    const { start: startDate, end: endDate } = getDateRange(timeRange, latestDate);
-
-    // Fill in any missing dates in the range
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const formattedDate = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}`;
-      if (!dailyProfits.has(formattedDate)) {
-        dailyProfits.set(formattedDate, {
-          date: formattedDate,
-          profit: 0
-        });
-      }
-    }
-
-    // Log daily profits
-    console.log('Daily Profits:', {
-      dates: Array.from(dailyProfits.keys()).sort(),
-      sampleValues: Array.from(dailyProfits.values()).slice(0, 3)
     });
 
     return Array.from(dailyProfits.values())
@@ -693,6 +711,11 @@ export const BuyerDashboard = ({
   }, [filteredData, timeRange, data.tableData]);
 
   const roi = metrics.spend > 0 ? (metrics.profit / metrics.spend) * 100 : 0;
+
+  // Initialize selected offers
+  useEffect(() => {
+    setSelectedOffers(offerPerformance.map(offer => offer.name));
+  }, [offerPerformance]);
 
   return (
     <div className="space-y-4">
@@ -737,8 +760,9 @@ export const BuyerDashboard = ({
       </div>
 
       <DailyProfitChart 
-        data={dailyProfitData} 
+        data={filteredData}  // Use filteredData instead of raw data
         timeRange={timeRange}
+        dateRange={timeRange}
       />
 
       <div className="flex flex-col gap-3">
@@ -753,6 +777,21 @@ export const BuyerDashboard = ({
           timeRange={timeRange}
         />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Offer Performance Over Time</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <MediaBuyerProfitChart 
+            data={filteredData}
+            selectedOffers={selectedOffers}
+            offers={offerPerformance.map(offer => `${offer.network} - ${offer.offer}`)}
+            setSelectedOffers={setSelectedOffers}
+            mediaBuyer={buyer}
+          />
+        </CardContent>
+      </Card>
 
       <div className="mt-8">
         <RawData 

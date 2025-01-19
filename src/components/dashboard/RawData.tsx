@@ -9,6 +9,7 @@ import Papa from 'papaparse';
 import { DashboardData } from '@/types/dashboard';
 import { formatDollar } from '@/utils/formatters';
 import { normalizeNetworkOffer } from '@/utils/dataUtils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type TimeRange = 'yesterday' | '7d' | '14d' | 'mtd' | '30d' | '60d' | 'lastMonth' | 'ytd' | 'custom';
 
@@ -83,7 +84,7 @@ const DateRangeSelector = ({
         value={timeRange}
         onChange={(e) => setTimeRange(e.target.value as TimeRange)}
       >
-        <option value="yesterday">Latest Date ({yesterdayDate})</option>
+        <option value="yesterday">Latest Date ({latestDate.toLocaleDateString()})</option>
         <option value="7d">Last 7 Days</option>
         <option value="14d">Last 14 Days</option>
         <option value="mtd">Month to Date</option>
@@ -424,6 +425,11 @@ export const RawData = ({
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
+  // First, let's format the date to string
+  const formatDate = (date: Date): string => {
+    return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}/${date.getFullYear()}`;
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4">
@@ -434,19 +440,45 @@ export const RawData = ({
             Export CSV
           </Button>
         </div>
-        <DateRangeSelector 
-          timeRange={timeRange}
-          setTimeRange={setTimeRange}
-          customDateString={customDateString}
-          setCustomDateString={setCustomDateString}
-          latestDate={latestDate}
-        />
+        <Select value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Select time range" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7d">Last 7 Days</SelectItem>
+            <SelectItem value="14d">Last 14 Days</SelectItem>
+            <SelectItem value="mtd">Month to Date</SelectItem>
+            <SelectItem value="30d">Last 30 Days</SelectItem>
+            <SelectItem value="60d">Last 60 Days</SelectItem>
+            <SelectItem value="lastMonth">Last Month</SelectItem>
+            <SelectItem value="ytd">Year to Date</SelectItem>
+          </SelectContent>
+        </Select>
         <FilterControls 
           data={data.tableData}
           selectedFilters={filters}
           onFilterChange={handleFilterChange}
           showMediaBuyerFilter={buyer === 'all'}
         />
+        <Select 
+          value={formatDate(latestDate)} 
+          onValueChange={(value) => {}}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Select date" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={formatDate(latestDate)}>Latest Date</SelectItem>
+            {Array.from(new Set(data.tableData.map(row => row.date)))
+              .filter(Boolean)  // Filter out any undefined/null values
+              .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())  // Sort dates descending
+              .map(date => (
+                <SelectItem key={date} value={date}>
+                  {date}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
       </CardHeader>
       <CardContent>
         <div className="rounded-md border">
