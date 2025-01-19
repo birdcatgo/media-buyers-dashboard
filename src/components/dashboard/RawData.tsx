@@ -15,7 +15,19 @@ type TimeRange = 'yesterday' | '7d' | '14d' | 'mtd' | '30d' | '60d' | 'lastMonth
 const DEFAULT_DATE_STRING = '2025-01-08';
 
 const getLatestDate = (data: any[]): Date => {
-  const dates = data
+  // Add more detailed logging
+  console.log('Raw data dates:', {
+    totalRows: data.length,
+    uniqueDates: Array.from(new Set(data.map(row => row.date))).sort(),
+    sampleRows: data.slice(0, 3).map(row => ({
+      date: row.date,
+      mediaBuyer: row.mediaBuyer,
+      profit: row.profit
+    }))
+  });
+
+  // First, validate and parse all dates
+  const validDates = data
     .map(row => {
       if (!row.date) return null;
       const [month, day, year] = row.date.split('/').map(Number);
@@ -23,12 +35,17 @@ const getLatestDate = (data: any[]): Date => {
       return isNaN(date.getTime()) ? null : date;
     })
     .filter((date): date is Date => date !== null);
+
+  // Find the latest date
+  const latestDate = new Date(Math.max(...validDates.map(d => d.getTime())));
   
-  const latestDate = new Date(Math.max(...dates.map(d => d.getTime())));
-  console.log('Latest date:', {
-    raw: latestDate,
-    formatted: `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`
+  // Debug logging
+  console.log('Latest date calculation:', {
+    allDates: validDates.map(d => d.toLocaleDateString('en-US')),
+    maxDate: `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`,
+    rawLatestDate: latestDate
   });
+
   return latestDate;
 };
 
@@ -52,8 +69,12 @@ const DateRangeSelector = ({
   setCustomDateString: (date: string) => void;
   latestDate: Date;
 }) => {
-  // Format latest date
-  const formattedLatestDate = `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`;
+  // Get yesterday's date for display
+  const yesterdayDate = useMemo(() => {
+    const yesterday = new Date(latestDate);
+    yesterday.setDate(latestDate.getDate() - 1);
+    return `${(yesterday.getMonth() + 1).toString().padStart(2, '0')}/${yesterday.getDate().toString().padStart(2, '0')}/${yesterday.getFullYear()}`;
+  }, [latestDate]);
 
   return (
     <div className="flex items-center gap-4">
@@ -62,7 +83,7 @@ const DateRangeSelector = ({
         value={timeRange}
         onChange={(e) => setTimeRange(e.target.value as TimeRange)}
       >
-        <option value="yesterday">Latest Date ({formattedLatestDate})</option>
+        <option value="yesterday">Latest Date ({yesterdayDate})</option>
         <option value="7d">Last 7 Days</option>
         <option value="14d">Last 14 Days</option>
         <option value="mtd">Month to Date</option>
@@ -195,78 +216,125 @@ export const RawData = ({
     }));
   }, [buyer]);
 
-  const getDateRange = (timeRange: TimeRange, latestDate: Date, customDateString?: string): { start: Date, end: Date } => {
-    let end = latestDate;
+  const getDateRange = (timeRange: TimeRange, latestDate: Date): { start: Date, end: Date } => {
+    let end = new Date(latestDate);
     let start: Date;
 
     switch (timeRange) {
       case 'yesterday':
+        // For yesterday, we want the latest date
         start = new Date(latestDate);
-        start.setDate(latestDate.getDate() - 1);
-        return { start, end: start };
+        start.setHours(0, 0, 0, 0); // Start of the latest date
+        end = new Date(latestDate);
+        end.setHours(23, 59, 59, 999); // End of the latest date
+        
+        // Debug log for yesterday dates
+        console.log('Yesterday date range:', {
+          latestDate: `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`,
+          start: `${(start.getMonth() + 1).toString().padStart(2, '0')}/${start.getDate().toString().padStart(2, '0')}/${start.getFullYear()}`,
+          end: `${(end.getMonth() + 1).toString().padStart(2, '0')}/${end.getDate().toString().padStart(2, '0')}/${end.getFullYear()}`
+        });
+        
+        return { start, end };
       case '7d':
         start = new Date(latestDate);
         start.setDate(latestDate.getDate() - 6);
-        return { start, end };
+        break;
       case '14d':
         start = new Date(latestDate);
         start.setDate(latestDate.getDate() - 13);
-        return { start, end };
+        break;
       case 'mtd':
         start = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
-        return { start, end };
+        break;
       case '30d':
         start = new Date(latestDate);
         start.setDate(latestDate.getDate() - 29);
-        return { start, end };
+        break;
       case '60d':
         start = new Date(latestDate);
         start.setDate(latestDate.getDate() - 59);
-        return { start, end };
+        break;
       case 'lastMonth':
         start = new Date(latestDate.getFullYear(), latestDate.getMonth() - 1, 1);
         end = new Date(latestDate.getFullYear(), latestDate.getMonth(), 0);
-        return { start, end };
+        break;
       case 'ytd':
         start = new Date(latestDate.getFullYear(), 0, 1);
-        return { start, end };
+        break;
       case 'custom':
         if (!customDateString) return { start: end, end };
         const [year, month, day] = customDateString.split('-').map(Number);
         start = new Date(year, month - 1, day);
-        return { start, end: start };
+        break;
       default:
         return { start: end, end };
     }
+
+    return { start, end };
   };
 
   const filteredData = useMemo(() => {
     let filtered = [...data.tableData];
     
+    // Debug incoming data
+    console.log('Initial data check:', {
+      totalRows: filtered.length,
+      jan16Data: filtered.filter(row => row.date === '01/16/2025').map(row => ({
+        date: row.date,
+        mediaBuyer: row.mediaBuyer,
+        profit: row.profit
+      })),
+      uniqueDates: Array.from(new Set(filtered.map(row => row.date))).sort()
+    });
+
     // Apply date range filter
     const { start, end } = getDateRange(timeRange, latestDate);
     filtered = filtered.filter(row => {
       const [month, day, year] = row.date.split('/').map(Number);
       const rowDate = new Date(year, month - 1, day);
-      return rowDate >= start && rowDate <= end;
+      rowDate.setHours(0, 0, 0, 0);
+      
+      const startTime = start.getTime();
+      const endTime = end.getTime();
+      const rowTime = rowDate.getTime();
+      
+      return rowTime >= startTime && rowTime <= endTime;
+    });
+
+    // Debug after date filter
+    console.log('After date filter:', {
+      afterFilter: filtered.length,
+      remainingRows: filtered.map(row => ({
+        date: row.date,
+        mediaBuyer: row.mediaBuyer,
+        profit: row.profit
+      }))
     });
 
     // Apply media buyer filter
     if (filters.mediaBuyer !== 'all') {
+      const beforeCount = filtered.length;
       filtered = filtered.filter(row => row.mediaBuyer === filters.mediaBuyer);
+      console.log('After media buyer filter:', {
+        buyer: filters.mediaBuyer,
+        beforeCount,
+        afterCount: filtered.length,
+        remainingRows: filtered.map(row => ({
+          date: row.date,
+          mediaBuyer: row.mediaBuyer,
+          profit: row.profit
+        }))
+      });
     }
 
-    // Apply ad account filter
+    // Apply remaining filters...
     if (filters.adAccount !== 'all') {
       filtered = filtered.filter(row => row.adAccount === filters.adAccount);
     }
-
-    // Apply offer filter
     if (filters.offer !== 'all') {
       filtered = filtered.filter(row => row.offer === filters.offer);
     }
-
-    // Apply network filter
     if (filters.network !== 'all') {
       filtered = filtered.filter(row => row.network === filters.network);
     }
@@ -275,8 +343,34 @@ export const RawData = ({
   }, [data.tableData, timeRange, latestDate, filters]);
 
   const sortedData = useMemo(() => {
-    if (!sortConfig) return filteredData;
+    if (!sortConfig) {
+      // Default sort by date descending, then by profit descending
+      return [...filteredData].sort((a, b) => {
+        // First sort by date
+        const [aMonth, aDay, aYear] = a.date.split('/').map(Number);
+        const [bMonth, bDay, bYear] = b.date.split('/').map(Number);
+        const dateA = new Date(aYear, aMonth - 1, aDay);
+        const dateB = new Date(bYear, bMonth - 1, bDay);
+        
+        const dateCompare = dateB.getTime() - dateA.getTime();
+        if (dateCompare !== 0) return dateCompare;
+        
+        // Then by profit
+        return b.profit - a.profit;
+      });
+    }
+
     return [...filteredData].sort((a: any, b: any) => {
+      if (sortConfig.key === 'date') {
+        const [aMonth, aDay, aYear] = a.date.split('/').map(Number);
+        const [bMonth, bDay, bYear] = b.date.split('/').map(Number);
+        const dateA = new Date(aYear, aMonth - 1, aDay);
+        const dateB = new Date(bYear, bMonth - 1, bDay);
+        return sortConfig.direction === 'asc' 
+          ? dateA.getTime() - dateB.getTime()
+          : dateB.getTime() - dateA.getTime();
+      }
+
       if (a[sortConfig.key] < b[sortConfig.key]) {
         return sortConfig.direction === 'asc' ? -1 : 1;
       }
@@ -286,6 +380,16 @@ export const RawData = ({
       return 0;
     });
   }, [filteredData, sortConfig]);
+
+  // Add debug logging after sorting
+  console.log('Sorted data:', {
+    totalRows: sortedData.length,
+    firstFewRows: sortedData.slice(0, 5).map(row => ({
+      date: row.date,
+      mediaBuyer: row.mediaBuyer,
+      profit: row.profit
+    }))
+  });
 
   const handleSort = (key: string) => {
     setSortConfig(current => ({

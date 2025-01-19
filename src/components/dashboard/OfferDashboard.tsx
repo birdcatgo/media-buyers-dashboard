@@ -364,19 +364,14 @@ const SummaryTable = ({ data, title, timeRange }: {
                 <th className="text-right p-2">Profit</th>
                 <th className="text-right p-2">ROI</th>
                 <th className="text-center p-2">Status</th>
-                <th className="text-center p-2">Trend</th>
+                {timeRange !== 'yesterday' && <th className="text-center p-2">Trend</th>}
               </tr>
             </thead>
             <tbody>
               {data.map((row, idx) => {
                 const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
-                const status = (() => {
-                  if (row.spend <= 0) return '⚪';
-                  if (roi >= 20) return '🟢';
-                  if (roi >= 1) return '🟠';
-                  return '🔴';
-                })();
-                const trend = getTrendIndicator(row.profit, row.previousPeriodProfit);
+                const status = getROIStatus(roi, row.spend);
+                const trend = timeRange !== 'yesterday' ? getPerformanceTrend(row) : null;
 
                 return (
                   <tr key={idx} className="border-b">
@@ -387,8 +382,10 @@ const SummaryTable = ({ data, title, timeRange }: {
                     <td className="text-right p-2">
                       {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
                     </td>
-                    <td className="text-center p-2">{status}</td>
-                    <td className="text-center p-2 font-bold">{trend.icon}</td>
+                    <td className="text-center p-2">
+                      <span title={status.label}>{status.icon}</span>
+                    </td>
+                    {timeRange !== 'yesterday' && <td className="text-center p-2">{trend}</td>}
                   </tr>
                 );
               })}
@@ -421,6 +418,16 @@ interface OfferPerformance {
   revenue: number;
   previousPeriodProfit: number;
 }
+
+// Update the getPerformanceTrend function to return an object with icon and color
+const getPerformanceTrend = (row: any) => {
+  if (!row.previousPeriodProfit) return { icon: 'NC', color: 'gray-500' };
+  const change = row.profit - row.previousPeriodProfit;
+  if (Math.abs(change) < 0.01) return { icon: '―', color: 'gray-500' };
+  return change > 0 
+    ? { icon: '↑', color: 'green-500' }
+    : { icon: '↓', color: 'red-500' };
+};
 
 // Add this new component after the existing Chart component
 const TotalProfitChart = ({ 
@@ -754,14 +761,14 @@ export const OfferDashboard = ({
                   <th className="text-right p-2">Profit</th>
                   <th className="text-right p-2">ROI</th>
                   <th className="text-center p-2">Status</th>
-                  <th className="text-center p-2">Trend</th>
+                  {timeRange !== 'yesterday' && <th className="text-center p-2">Trend</th>}
                 </tr>
               </thead>
               <tbody>
                 {sortedOfferPerformance.map((row, idx) => {
                   const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
                   const status = getROIStatus(roi, row.spend);
-                  const trend = getTrendIndicator(row.profit, row.previousPeriodProfit);
+                  const trend = timeRange !== 'yesterday' ? getPerformanceTrend(row) : null;
 
                   return (
                     <tr key={idx} className="border-b">
@@ -775,20 +782,15 @@ export const OfferDashboard = ({
                       <td className="text-center p-2">
                         <span title={status.label}>{status.icon}</span>
                       </td>
-                      <td className="text-center p-2">
-                        <div className="flex items-center justify-center gap-1">
-                          <span className={
-                            trend.type === 'positive' ? 'text-green-500' :
-                            trend.type === 'negative' ? 'text-red-500' :
-                            'text-gray-500'
-                          }>
-                            {trend.icon}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {trend.label}
-                          </span>
-                        </div>
-                      </td>
+                      {timeRange !== 'yesterday' && (
+                        <td className="text-center p-2">
+                          {trend && (
+                            <span className={`text-${trend.color} font-bold text-lg`}>
+                              {trend.icon}
+                            </span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

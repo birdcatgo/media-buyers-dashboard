@@ -343,18 +343,17 @@ const getDateRange = (timeRange: TimeRange, latestDate: Date): { start: Date, en
 
   switch (timeRange) {
     case 'yesterday':
-      // For yesterday, we want the day before the latest date
+      // For yesterday, we want the latest date
       start = new Date(latestDate);
-      start.setDate(latestDate.getDate() - 1);
-      start.setHours(0, 0, 0, 0);
-      end = new Date(start);
-      end.setHours(23, 59, 59, 999);
+      start.setHours(0, 0, 0, 0); // Start of the latest date
+      end = new Date(latestDate);
+      end.setHours(23, 59, 59, 999); // End of the latest date
       
       // Debug log for yesterday dates
       console.log('Yesterday date range:', {
-        latestDate: latestDate.toLocaleDateString(),
-        start: start.toLocaleDateString(),
-        end: end.toLocaleDateString()
+        latestDate: `${(latestDate.getMonth() + 1).toString().padStart(2, '0')}/${latestDate.getDate().toString().padStart(2, '0')}/${latestDate.getFullYear()}`,
+        start: `${(start.getMonth() + 1).toString().padStart(2, '0')}/${start.getDate().toString().padStart(2, '0')}/${start.getFullYear()}`,
+        end: `${(end.getMonth() + 1).toString().padStart(2, '0')}/${end.getDate().toString().padStart(2, '0')}/${end.getFullYear()}`
       });
       
       return { start, end };
@@ -409,8 +408,8 @@ const getSimplifiedTrend = (current: number, previous: number) => {
   }
 };
 
-export const BuyerDashboard = ({ 
-  buyer, 
+export const BuyerDashboard = ({
+  buyer,
   data,
   offer = 'all',
   network = 'all' 
@@ -458,9 +457,9 @@ export const BuyerDashboard = ({
 
     return mtdData.reduce(
       (acc, row) => ({
-        spend: acc.spend + row.adSpend,
-        revenue: acc.revenue + row.adRev,
-        profit: acc.profit + row.profit
+      spend: acc.spend + row.adSpend,
+      revenue: acc.revenue + row.adRev,
+      profit: acc.profit + row.profit
       }),
       { spend: 0, revenue: 0, profit: 0 }
     );
@@ -761,22 +760,6 @@ export const BuyerDashboard = ({
           data={{
             ...data,
             tableData: data.tableData
-              .filter(row => {
-                // Always filter by buyer
-                if (row.mediaBuyer !== buyer) return false;
-
-                // Apply network filter if specified
-                if (network !== 'all' && row.network !== network) return false;
-
-                // Apply offer filter if specified
-                if (offer !== 'all' && row.offer !== offer) return false;
-
-                // Apply time range filter
-                const [month, day, year] = row.date.split('/').map(Number);
-                const rowDate = new Date(year, month - 1, day);
-                const { start, end } = getDateRange(timeRange, getLatestDate(data.tableData));
-                return rowDate >= start && rowDate <= end;
-              })
           }}
           offer={offer}
           network={network}

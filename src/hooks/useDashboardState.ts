@@ -25,9 +25,11 @@ const processNumericValue = (value: string | number | null): number => {
   return Number(value.replace(/[^0-9.-]+/g, '')) || 0;
 };
 
+export type DateRange = 'yesterday' | '7d' | 'mtd' | 'all';
+
 export const useDashboardState = (initialBuyer: string) => {
   const [selectedBuyer, setSelectedBuyer] = useState(initialBuyer);
-  const [dateRange, setDateRange] = useState<'yesterday' | 'mtd' | '7d' | 'all'>('mtd');
+  const [dateRange, setDateRange] = useState<DateRange>('mtd');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [data, setData] = useState<DashboardData>({
     dailyData: [],
@@ -42,8 +44,8 @@ export const useDashboardState = (initialBuyer: string) => {
       const sheetData = await fetchGoogleSheetsData();
       console.log('Sheet data received:', {
         count: sheetData?.length,
-        sampleRow: sheetData?.[0],
-        dateRange
+        uniqueDates: Array.from(new Set(sheetData?.map(row => row.date))).sort(),
+        sampleRow: sheetData?.[0]
       });
       
       if (sheetData?.length) {

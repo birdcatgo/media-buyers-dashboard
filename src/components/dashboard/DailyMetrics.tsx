@@ -387,18 +387,18 @@ export const DailyMetrics = ({
                           <span className="text-xs text-gray-500">
                             {row.trend.label}
                           </span>
-                        </div>
+        </div>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </div>
-        </CardContent>
-      </Card>
+      </div>
+    </CardContent>
+  </Card>
     </div>
-  );
+);
 };
 
 // Add PerformanceChart component
