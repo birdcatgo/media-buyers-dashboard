@@ -1,14 +1,12 @@
 'use client';
 
+import React from 'react';
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 
 const DashboardMain = dynamic(
-  () => import('./dashboard/DashboardMain').then(mod => mod.default),
-  { 
-    loading: () => <div>Loading...</div>,
-    ssr: false
-  }
+  () => import('./dashboard/DashboardMain'),
+  { ssr: false }
 );
 
 export default function ClientPage() {

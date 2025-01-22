@@ -4,8 +4,6 @@ import { format } from 'date-fns';
 
 export async function GET() {
   try {
-    console.log('API Route: Starting fetch');
-    
     if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL || 
         !process.env.GOOGLE_SHEETS_PRIVATE_KEY || 
         !process.env.GOOGLE_SHEETS_SPREADSHEET_ID) {
@@ -59,12 +57,6 @@ export async function GET() {
       })
       .filter(row => row.date && row.mediaBuyer && row.network); // Filter out rows with missing essential data
 
-    console.log('API processed data sample:', {
-      totalRows: processedData.length,
-      firstRow: processedData[0],
-      dateType: typeof processedData[0]?.date
-    });
-
     return NextResponse.json(processedData, {
       headers: {
         'Content-Type': 'application/json',
@@ -72,12 +64,7 @@ export async function GET() {
     });
 
   } catch (err) {
-    const error = err as Error;
-    console.error('API Error:', {
-      message: error.message,
-      stack: error.stack
-    });
-    
+    console.error('API Error:', err);
     return NextResponse.json(
       { error: 'Failed to fetch data from Google Sheets' }, 
       { status: 500 }

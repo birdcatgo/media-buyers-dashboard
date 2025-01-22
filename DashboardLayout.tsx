@@ -26,12 +26,6 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader 
-        currentUser={currentUser} 
-        userRole={userRole}
-        selectedBuyer={selectedBuyer}
-        onBuyerChange={setSelectedBuyer}
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
         onRefresh={async () => {}}
         isRefreshing={false}
       />

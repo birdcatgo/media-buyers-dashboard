@@ -3,15 +3,8 @@
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { DateRange } from '@/hooks/useDashboardState';
 
 interface DashboardHeaderProps {
-  currentUser?: string;
-  userRole?: 'admin' | 'media_buyer' | 'viewer';
-  selectedBuyer?: string;
-  onBuyerChange?: (value: string) => void;
-  dateRange?: DateRange;
-  onDateRangeChange?: (value: DateRange) => void;
   onRefresh: () => Promise<void>;
   isRefreshing?: boolean;
 }

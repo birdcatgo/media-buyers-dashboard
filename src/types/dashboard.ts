@@ -7,6 +7,9 @@ export interface TableData {
   adSpend: number;
   adRev: number;
   profit: number;
+  dailyCap: number;
+  dailyBudget: number;
+  currentExposure: number;
 }
 
 export interface DashboardData {
