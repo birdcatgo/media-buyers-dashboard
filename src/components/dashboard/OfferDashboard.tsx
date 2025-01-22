@@ -517,11 +517,20 @@ const TotalProfitChart = ({
   );
 };
 
-// Add this helper function
+// Update the calculateCapUtilization helper function
 const calculateCapUtilization = (revenue: number, dailyCap: number): string => {
-  if (!dailyCap) return 'No Cap';
+  if (dailyCap === 100000) return '-'; // For $100k caps, show dash
+  if (dailyCap === 0) return '-';      // For $0 caps, show dash
+  if (!dailyCap) return '-';           // For no cap, show dash
   const utilization = (revenue / dailyCap) * 100;
   return `${utilization.toFixed(1)}%`;
+};
+
+// Update the formatDailyCap helper function (add this new function)
+const formatDailyCap = (dailyCap: number): string => {
+  if (dailyCap === 100000) return 'Uncapped';
+  if (dailyCap === 0) return 'Paused';
+  return formatDollar(dailyCap);
 };
 
 export const OfferDashboard = ({
@@ -836,12 +845,12 @@ export const OfferDashboard = ({
                       <td className="text-right p-2">
                         {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
                       </td>
-                      <td className="text-right p-2">{formatDollar(row.dailyCap)}</td>
+                      <td className="text-right p-2">{formatDailyCap(row.dailyCap)}</td>
                       <td className={`text-right p-2 ${
                         row.capUtilization > 90 ? 'text-red-600 font-bold' : 
                         row.capUtilization > 75 ? 'text-yellow-600' : ''
                       }`}>
-                        {row.dailyCap > 0 ? `${row.capUtilization.toFixed(1)}%` : 'No Cap'}
+                        {calculateCapUtilization(row.revenue, row.dailyCap)}
                       </td>
                       <td className="text-center p-2">
                         <span title={status.label}>{status.icon}</span>
