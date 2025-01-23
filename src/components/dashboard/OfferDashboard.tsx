@@ -64,7 +64,6 @@ const validateDates = (data: any[]) => {
     }
   };
 };
-
 // Add getDateRange helper function
 const getDateRange = (timeRange: TimeRange, latestDate: Date): { start: Date, end: Date } => {
   // Validate input date
@@ -175,7 +174,6 @@ const getFilteredData = (data: any[], timeRange: TimeRange) => {
     return rowDate >= start && rowDate <= end;
   });
 };
-
 // Add getLatestDate helper function
 const getLatestDate = (data: any[]): Date => {
   // Get all valid dates from the data
@@ -326,7 +324,6 @@ const Chart = ({ data, selectedOffers, metricType }: {
     </ResponsiveContainer>
   );
 };
-
 const SummaryTable = ({ data, title, timeRange }: { 
   data: any[]; 
   title: string;
@@ -381,8 +378,8 @@ const SummaryTable = ({ data, title, timeRange }: {
                     <td className="text-right p-2">{formatDollar(row.revenue)}</td>
                     <td className="text-right p-2">{formatDollar(row.profit)}</td>
                     <td className="text-right p-2">
-                      {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
-                    </td>
+  {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
+</td>
                     <td className="text-center p-2">
                       <span title={status.label}>{status.icon}</span>
                     </td>
@@ -419,7 +416,6 @@ interface OfferPerformance {
   revenue: number;
   previousPeriodProfit: number;
 }
-
 // Update the getPerformanceTrend function to return an object with icon and color
 const getPerformanceTrend = (row: any) => {
   if (!row.previousPeriodProfit) return { icon: 'NC', color: 'gray-500' };
@@ -519,10 +515,16 @@ const TotalProfitChart = ({
 
 // Update the calculateCapUtilization helper function
 const calculateCapUtilization = (revenue: number, dailyCap: number): string => {
-  if (dailyCap === 100000) return '-'; // For $100k caps, show dash
-  if (dailyCap === 0) return '-';      // For $0 caps, show dash
-  if (!dailyCap) return '-';           // For no cap, show dash
+  // Handle special cases first
+  if (dailyCap === 0 || dailyCap === 100000 || !dailyCap) return '-';
+  
+  // Ensure a minimum meaningful calculation
+  if (revenue === 0) return '0.0%';
+  
+  // Normal calculation
   const utilization = (revenue / dailyCap) * 100;
+  
+  // Ensure at least two decimal places of precision
   return `${utilization.toFixed(1)}%`;
 };
 
@@ -532,7 +534,6 @@ const formatDailyCap = (dailyCap: number): string => {
   if (dailyCap === 0) return 'Paused';
   return formatDollar(dailyCap);
 };
-
 export const OfferDashboard = ({
   data
 }: {
@@ -635,76 +636,88 @@ export const OfferDashboard = ({
     hasData: combinedData.some(d => d.Total !== 0)
   });
 
-  // Update the sortedOfferPerformance calculation
   const sortedOfferPerformance = useMemo(() => {
     const filteredTableData = getFilteredData(data.tableData, timeRange);
     const latestDate = getLatestDate(filteredTableData);
-
+  
+    // Get yesterday's date
+    const yesterday = new Date(latestDate);
+    yesterday.setDate(yesterday.getDate() - 1);
+  
+    // Filter data for yesterday
+    const yesterdayData = data.tableData.filter(row => {
+      const [month, day, year] = row.date.split('/').map(Number);
+      const rowDate = new Date(year, month - 1, day);
+      return rowDate.toDateString() === yesterday.toDateString();
+    });
+  
     // Calculate period length and previous period
     const { start: currentStart, end: currentEnd } = getDateRange(timeRange, latestDate);
     const periodLength = currentEnd.getTime() - currentStart.getTime();
-    const daysInPeriod = Math.ceil(periodLength / (1000 * 60 * 60 * 24)) + 1;
     
     // Calculate previous period dates
     const previousStart = new Date(currentStart.getTime() - periodLength);
     const previousEnd = new Date(currentStart.getTime() - 1);
-
+  
     const metrics = new Map();
-    
-    // Calculate revenue by day for each offer
     const revenueByDay = new Map();
     const periodRevenue = new Map();
-    
-    filteredTableData.forEach(row => {
-      let key = `${row.network}-${row.offer}`;
-      if (row.network === 'Suited' && row.offer === 'ACA') {
-        key = 'ACA-ACA';
-      }
-
-      // Track unique days
-      if (!revenueByDay.has(key)) {
-        revenueByDay.set(key, new Set());
-      }
-      revenueByDay.get(key).add(row.date);
-
-      // Track total revenue
-      const current = periodRevenue.get(key) || 0;
-      periodRevenue.set(key, current + row.adRev);
+  
+    // Calculate cap utilization based on yesterday's data
+    const yesterdayCapUtilization = new Map();
+    yesterdayData.forEach(row => {
+      let key = row.network === 'Suited' && row.offer === 'ACA' 
+        ? 'ACA-ACA' 
+        : `${row.network}-${row.offer}`;
+      
+      const dailyCap = capData[key] || 0;
+      const current = yesterdayCapUtilization.get(key) || { 
+        revenue: 0, 
+        dailyCap: dailyCap 
+      };
+      current.revenue += row.adRev;
+      yesterdayCapUtilization.set(key, current);
     });
-
+  
     // Calculate metrics for current period
     filteredTableData.forEach(row => {
       let key = `${row.network}-${row.offer}`;
       if (row.network === 'Suited' && row.offer === 'ACA') {
         key = 'ACA-ACA';
       }
-
+  
       const dailyCap = capData[key] || 0;
-      const totalRevenue = periodRevenue.get(key) || 0;
-      const actualDays = revenueByDay.get(key)?.size || 0; // Get actual number of days with revenue
-      
-      const current = metrics.get(key) || { 
+  
+      // Track unique days
+      if (!revenueByDay.has(key)) {
+        revenueByDay.set(key, new Set());
+      }
+      revenueByDay.get(key).add(row.date);
+  
+      // Track total revenue
+      const currentRevenue = periodRevenue.get(key) || 0;
+      periodRevenue.set(key, currentRevenue + row.adRev);
+  
+      const metricEntry = metrics.get(key) || { 
         spend: 0, 
         revenue: 0, 
         profit: 0,
         previousPeriodProfit: 0,
         dailyCap,
-        totalRevenue,
-        actualDays,
         dailyBudget: row.dailyBudget || 0,
         currentExposure: row.currentExposure || 0
       };
-
+  
       metrics.set(key, {
-        ...current,
-        spend: current.spend + row.adSpend,
-        revenue: current.revenue + row.adRev,
-        profit: current.profit + row.profit,
-        dailyBudget: row.dailyBudget || current.dailyBudget,
-        currentExposure: row.currentExposure || current.currentExposure
+        ...metricEntry,
+        spend: metricEntry.spend + row.adSpend,
+        revenue: metricEntry.revenue + row.adRev,
+        profit: metricEntry.profit + row.profit,
+        dailyBudget: row.dailyBudget || metricEntry.dailyBudget,
+        currentExposure: row.currentExposure || metricEntry.currentExposure
       });
     });
-
+  
     // Calculate previous period metrics
     data.tableData.forEach(row => {
       const [month, day, year] = row.date.split('/').map(Number);
@@ -721,23 +734,31 @@ export const OfferDashboard = ({
         }
       }
     });
-
+  
     return Array.from(metrics.entries())
-      .map(([name, values]) => ({
-        name,
-        ...values,
-        capUtilization: values.dailyCap > 0 
-          ? timeRange === 'yesterday'
-            ? (values.totalRevenue / values.dailyCap) * 100 // For yesterday, use daily revenue
-            : ((values.totalRevenue / values.actualDays) / values.dailyCap) * 100 // For other periods, use average daily revenue
-          : 0,
-        trend: values.previousPeriodProfit !== 0
-          ? ((values.profit - values.previousPeriodProfit) / Math.abs(values.previousPeriodProfit)) * 100
-          : 0
-      }))
+      .map(([name, values]) => {
+        const capKey = name === 'ACA - ACA' ? 'ACA-ACA' : name;
+        
+        const yesterdayData = yesterdayCapUtilization.get(capKey) || { 
+          revenue: 0, 
+          dailyCap: capData[capKey] || 0 
+        };
+  
+        return {
+          name,
+          ...values,
+          capUtilization: calculateCapUtilization(
+            yesterdayData.revenue, 
+            yesterdayData.dailyCap
+          ),
+          trend: values.previousPeriodProfit !== 0
+            ? ((values.profit - values.previousPeriodProfit) / Math.abs(values.previousPeriodProfit)) * 100
+            : 0
+        };
+      })
       .sort((a, b) => b.profit - a.profit);
   }, [data.tableData, timeRange, capData]);
-
+  
   // Update the data preparation for the table to include previous period data
   const { offerPerformance } = useMemo(() => {
     const latestDate = getLatestDate(data.tableData);
@@ -830,44 +851,43 @@ export const OfferDashboard = ({
                 </tr>
               </thead>
               <tbody>
-                {sortedOfferPerformance.map((row, idx) => {
-                  const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
-                  const status = getROIStatus(roi, row.spend);
-                  const trend = timeRange !== 'yesterday' ? getPerformanceTrend(row) : null;
-                  const capUtilization = calculateCapUtilization(row.revenue, row.dailyCap);
-
-                  return (
-                    <tr key={idx} className="border-b">
-                      <td className="p-2">{row.name}</td>
-                      <td className="text-right p-2">{formatDollar(row.spend)}</td>
-                      <td className="text-right p-2">{formatDollar(row.revenue)}</td>
-                      <td className="text-right p-2">{formatDollar(row.profit)}</td>
-                      <td className="text-right p-2">
-                        {row.spend > 0 ? `${roi.toFixed(1)}%` : 'N/A'}
-                      </td>
-                      <td className="text-right p-2">{formatDailyCap(row.dailyCap)}</td>
-                      <td className={`text-right p-2 ${
-                        row.capUtilization > 90 ? 'text-red-600 font-bold' : 
-                        row.capUtilization > 75 ? 'text-yellow-600' : ''
-                      }`}>
-                        {calculateCapUtilization(row.revenue, row.dailyCap)}
-                      </td>
-                      <td className="text-center p-2">
-                        <span title={status.label}>{status.icon}</span>
-                      </td>
-                      {timeRange !== 'yesterday' && (
-                        <td className="text-center p-2">
-                          {trend && (
-                            <span className={`text-${trend.color} font-bold text-lg`}>
-                              {trend.icon}
-                            </span>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
+        {sortedOfferPerformance.map((row, idx) => {
+          const roi = row.spend > 0 ? (row.profit / row.spend) * 100 : 0;
+          const status = getROIStatus(roi, row.spend);
+          const trend = timeRange !== 'yesterday' ? getPerformanceTrend(row) : null;
+          const capUtilization = calculateCapUtilization(row.revenue, row.dailyCap);
+          
+          return (
+            <tr key={idx} className="border-b">
+              <td className="p-2">{row.name}</td>
+              <td className="text-right p-2">{formatDollar(row.spend)}</td>
+              <td className="text-right p-2">{formatDollar(row.revenue)}</td>
+              <td className="text-right p-2">{formatDollar(row.profit)}</td>
+              <td className="text-right p-2">
+              </td>
+              <td className="text-right p-2">{formatDailyCap(row.dailyCap)}</td>
+              <td className={`text-right p-2 ${
+                row.capUtilization > 90 ? 'text-red-600 font-bold' : 
+                row.capUtilization > 75 ? 'text-yellow-600' : ''
+              }`}>
+                  {row.capUtilization}
+              </td>
+              <td className="text-center p-2">
+                <span title={status.label}>{status.icon}</span>
+              </td>
+              {timeRange !== 'yesterday' && (
+                <td className="text-center p-2">
+                  {trend && (
+                    <span className={`text-${trend.color} font-bold text-lg`}>
+                      {trend.icon}
+                    </span>
+                  )}
+                </td>
+              )}
+            </tr>
+          );
+        })}
+      </tbody>
             </table>
           </div>
         </CardContent>
@@ -894,4 +914,4 @@ export const OfferDashboard = ({
       </Card>
     </div>
   );
-}; 
+};
