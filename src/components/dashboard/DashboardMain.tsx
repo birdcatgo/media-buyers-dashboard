@@ -22,7 +22,17 @@ const DashboardMain: React.FC = () => {
     isRefreshing 
   } = useDashboardState('all');
 
-  const mediaBuyers = ['Mike', 'Asheesh', 'Dave', 'Zel', 'Daniel', 'Alex', 'Youssef'];
+  const mediaBuyers = [
+    'Mike', 
+    'Asheesh', 
+    'Dave', 
+    'Zel', 
+    'Daniel', 
+    'Alex', 
+    'Youssef',
+    'Aakash',
+    'Jose/Matt'
+  ];
 
   const [currentTab, setCurrentTab] = useState('overview');
 
