@@ -1,15 +1,25 @@
 'use client';
 
 import React from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface DashboardHeaderProps {
   onRefresh: () => Promise<void>;
   isRefreshing?: boolean;
+  lastRefreshTime?: number;
 }
 
-export const DashboardHeader = ({ onRefresh, isRefreshing = false }: DashboardHeaderProps) => {
+export const DashboardHeader = ({ 
+  onRefresh, 
+  isRefreshing = false,
+  lastRefreshTime
+}: DashboardHeaderProps) => {
+  const formatLastRefreshTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString();
+  };
+
   return (
     <header className="border-b bg-gradient-to-r from-[#450a0a] to-[#991b1b] text-white">
       <div className="container flex h-20 items-center justify-between">
@@ -19,16 +29,24 @@ export const DashboardHeader = ({ onRefresh, isRefreshing = false }: DashboardHe
           </svg>
           <h1 className="text-2xl font-bold">Convert 2 Freedom - Media Buyer Dashboard</h1>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="bg-white text-[#450a0a] hover:bg-white/90 hover:text-[#450a0a] border-white"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-          {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-        </Button>
+        <div className="flex items-center gap-4">
+          {lastRefreshTime && (
+            <div className="flex items-center text-sm">
+              <Clock className="h-4 w-4 mr-2" />
+              Last updated: {formatLastRefreshTime(lastRefreshTime)}
+            </div>
+          )}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="bg-white text-[#450a0a] hover:bg-white/90 hover:text-[#450a0a] border-white"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+          </Button>
+        </div>
       </div>
     </header>
   );

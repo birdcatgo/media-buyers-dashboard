@@ -31,6 +31,7 @@ export const useDashboardState = (initialBuyer: string) => {
   const [selectedBuyer, setSelectedBuyer] = useState(initialBuyer);
   const [dateRange, setDateRange] = useState<DateRange>('mtd');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now());
   const [data, setData] = useState<DashboardData>({
     dailyData: [],
     offerData: [],
@@ -38,42 +39,60 @@ export const useDashboardState = (initialBuyer: string) => {
     tableData: []
   });
 
-  const refreshData = async () => {
+  const refreshData = async (forceRefresh: boolean = false) => {
     setIsRefreshing(true);
     try {
-      const sheetData = await fetchGoogleSheetsData();
-      console.log('Sheet data received:', {
-        count: sheetData?.length,
-        uniqueDates: Array.from(new Set(sheetData?.map(row => row.date))).sort(),
-        sampleRow: sheetData?.[0]
-      });
+      // Add a timestamp to prevent caching
+      const timestamp = Date.now();
+      const sheetData = await fetchGoogleSheetsData(timestamp);
       
-      if (sheetData?.length) {
-        // Process the raw data
-        const processedData = sheetData.map(row => ({
-          ...row,
-          date: row.date,  // Already in MM/DD/YYYY format
-          adSpend: processNumericValue(row.adSpend),
-          adRev: processNumericValue(row.adRev),
-          profit: processNumericValue(row.profit),
-          revenue: processNumericValue(row.adRev),
-          name: `${row.network} - ${row.offer}`
-        }));
+      console.log('Fetching fresh data:', {
+        timestamp: new Date().toISOString(),
+        rowCount: sheetData?.length,
+        forceRefresh,
+        dateRange,
+        sampleData: sheetData?.slice(0, 3)
+      });
 
-        console.log('Processed dashboard data:', {
-          count: processedData.length,
-          sampleRow: processedData[0],
-          allDates: Array.from(new Set(processedData.map(row => row.date))).sort()
+      if (sheetData?.length) {
+        // Clear any existing data first
+        setData({
+          dailyData: [],
+          offerData: [],
+          networkData: [],
+          tableData: []
         });
 
-        const newData: DashboardData = {
-          dailyData: processedData,
-          offerData: processedData,
-          networkData: processedData,
-          tableData: processedData
-        };
+        // Process the raw data with a small delay to ensure state clear
+        setTimeout(() => {
+          const processedData = sheetData.map(row => ({
+            ...row,
+            date: row.date,
+            adSpend: processNumericValue(row.adSpend),
+            adRev: processNumericValue(row.adRev),
+            profit: processNumericValue(row.profit),
+            revenue: processNumericValue(row.adRev),
+            name: `${row.network} - ${row.offer}`
+          }));
 
-        setData(newData);
+          // Update with new data
+          const newData: DashboardData = {
+            dailyData: processedData,
+            offerData: processedData,
+            networkData: processedData,
+            tableData: processedData
+          };
+
+          setData(newData);
+          setLastRefreshTime(Date.now());
+
+          console.log('Data refresh complete:', {
+            timestamp: new Date().toISOString(),
+            processedRows: processedData.length,
+            uniqueDates: Array.from(new Set(processedData.map(row => row.date))).sort(),
+            uniqueBuyers: Array.from(new Set(processedData.map(row => row.mediaBuyer))).sort()
+          });
+        }, 100);
       }
     } catch (error) {
       console.error('Failed to refresh data:', error);
@@ -84,13 +103,22 @@ export const useDashboardState = (initialBuyer: string) => {
 
   // Initial data fetch
   useEffect(() => {
-    refreshData();
+    refreshData(true);
   }, []);
 
   // Refresh data when date range changes
   useEffect(() => {
-    refreshData();
+    refreshData(true);
   }, [dateRange]);
+
+  // Add an interval to check for updates more frequently (every 1 minute)
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      refreshData(true); // Force refresh every time
+    }, 60 * 1000); // Check every minute
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   return {
     selectedBuyer,
@@ -98,7 +126,8 @@ export const useDashboardState = (initialBuyer: string) => {
     dateRange,
     setDateRange,
     data,
-    refreshData,
-    isRefreshing
+    refreshData: () => refreshData(true),
+    isRefreshing,
+    lastRefreshTime
   };
 };

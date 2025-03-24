@@ -19,21 +19,35 @@ const DashboardMain: React.FC = () => {
     setDateRange,
     data,
     refreshData,
-    isRefreshing 
+    isRefreshing,
+    lastRefreshTime
   } = useDashboardState('all');
 
-  const mediaBuyers = [
+  // Active media buyers
+  const activeBuyers = [
     'Mike', 
-    'Asheesh', 
-    'Dave', 
+    'Mike C',
     'Zel', 
-    'Daniel', 
-    'Alex', 
-    'Youssef',
     'Aakash',
-    'Jose/Matt'
+    'Jose/Matt',
+    'Isha',
+    'Ishaan',
+    'Edwin',
+    'Omar',
+    'Nick N',
+    'Gagan'
   ];
 
+  // Archived media buyers
+  const archivedBuyers = [
+    'Dave',
+    'Asheesh',
+    'Alex',
+    'Youssef',
+    'Daniel'
+  ];
+
+  const [showArchived, setShowArchived] = useState(false);
   const [currentTab, setCurrentTab] = useState('overview');
 
   const tabs = [
@@ -46,58 +60,93 @@ const DashboardMain: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader onRefresh={refreshData} isRefreshing={isRefreshing} />
-      <div className="container mx-auto p-6">
+      <DashboardHeader 
+        onRefresh={refreshData} 
+        isRefreshing={isRefreshing}
+        lastRefreshTime={lastRefreshTime}
+      />
+      <div className="container max-w-[2000px] mx-auto p-6">
         <Card className="p-6">
           <Tabs 
             defaultValue="overview" 
             className="space-y-6"
             onValueChange={setCurrentTab}
           >
-            <div className="flex justify-between items-center mb-6">
-              <TabsList className="bg-[#450a0a]/10 p-1 rounded-lg w-full flex">
+            <div className="flex flex-col gap-2">
+              {/* Main tabs and active buyers */}
+              <TabsList className="bg-[#450a0a]/10 p-1 rounded-lg w-full flex flex-nowrap overflow-x-auto">
                 <TabsTrigger 
                   value="overview" 
-                  className="flex-1 px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
+                  className="whitespace-nowrap px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
                 >
                   Overview
                 </TabsTrigger>
                 <TabsTrigger 
                   value="highlights"
-                  className="flex-1 px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
+                  className="whitespace-nowrap px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
                 >
                   Highlights
                 </TabsTrigger>
                 <TabsTrigger 
                   value="yesterday"
-                  className="flex-1 px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
+                  className="whitespace-nowrap px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
                 >
                   Yesterday
                 </TabsTrigger>
                 <TabsTrigger 
                   value="mtd"
-                  className="flex-1 px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
+                  className="whitespace-nowrap px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
                 >
                   MTD
                 </TabsTrigger>
                 <TabsTrigger 
                   value="offers"
-                  className="flex-1 px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
+                  className="whitespace-nowrap px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
                 >
                   Offers
                 </TabsTrigger>
-                {mediaBuyers.map(buyer => (
+
+                {/* Active Media Buyers */}
+                {activeBuyers.map(buyer => (
                   <TabsTrigger 
                     key={buyer} 
                     value={buyer.toLowerCase()} 
-                    className="flex-1 px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
+                    className="whitespace-nowrap px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
                   >
                     {buyer}
                   </TabsTrigger>
                 ))}
+              </TabsList>
+
+              {/* Archive and Raw Data on second line */}
+              <TabsList className="bg-[#450a0a]/10 p-1 rounded-lg w-full flex gap-2">
+                {/* Archive Dropdown */}
+                <div className="relative">
+                  <TabsTrigger 
+                    value="archive"
+                    className="px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
+                    onClick={() => setShowArchived(!showArchived)}
+                  >
+                    Archive ▼
+                  </TabsTrigger>
+                  {showArchived && (
+                    <div className="absolute top-full left-0 w-48 mt-1 bg-white border rounded-md shadow-lg z-50">
+                      {archivedBuyers.map(buyer => (
+                        <TabsTrigger 
+                          key={buyer} 
+                          value={buyer.toLowerCase()} 
+                          className="w-full px-4 py-2 hover:bg-gray-100 text-left"
+                        >
+                          {buyer}
+                        </TabsTrigger>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <TabsTrigger 
                   value="raw"
-                  className="flex-1 px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
+                  className="px-4 py-2 rounded-md data-[state=active]:bg-[#450a0a] data-[state=active]:text-white transition-all"
                 >
                   Raw Data
                 </TabsTrigger>
@@ -126,7 +175,18 @@ const DashboardMain: React.FC = () => {
               <OfferDashboard data={data} />
             </TabsContent>
 
-            {mediaBuyers.map(buyer => (
+            {/* Active Buyers Content */}
+            {activeBuyers.map(buyer => (
+              <TabsContent key={buyer} value={buyer.toLowerCase()}>
+                <BuyerDashboard 
+                  buyer={buyer}
+                  data={data}
+                />
+              </TabsContent>
+            ))}
+
+            {/* Archived Buyers Content */}
+            {archivedBuyers.map(buyer => (
               <TabsContent key={buyer} value={buyer.toLowerCase()}>
                 <BuyerDashboard 
                   buyer={buyer}
